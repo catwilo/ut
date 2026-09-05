@@ -247,13 +247,16 @@ cmd_distribute() {
             continue
         fi
         info "distributing $_repo -> $alias..."
-        if nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
-            nssh "$alias" "git -C ~/$_rbase pull --rebase origin main && { [ ! -f ~/$_rbase/install.sh ] || ~/$_rbase/install.sh; }" \
-                && { ok "$alias — $_repo updated"; log_change "$_repo" "distribute:$alias"; } \
-                || err "$alias — distribution failed"
-        else
-            warn "$alias — $_repo not cloned, skipping (run: nssh $alias then ut clone $_repo)"
+        if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            info "$alias — $_repo not cloned, installing..."
+            if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
+                warn "$alias — $_repo auto-install failed, skipping"
+                continue
+            fi
         fi
+        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main && { [ ! -f ~/$_rbase/install.sh ] || ~/$_rbase/install.sh; }" \
+            && { ok "$alias — $_repo updated"; log_change "$_repo" "distribute:$alias"; } \
+            || err "$alias — distribution failed"
     done <<< "$(_devices_aliases "$_devices")"
     ok "distribute complete"
 }
@@ -277,13 +280,16 @@ cmd_distribute_only_one() {
             continue
         fi
         info "distributing $_repo -> $alias (no install)..."
-        if nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
-            nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" \
-                && { ok "$alias — $_repo updated (not installed)"; log_change "$_repo" "distribute:$alias"; } \
-                || err "$alias — distribution failed"
-        else
-            warn "$alias — $_repo not cloned, skipping (run: nssh $alias then ut clone $_repo)"
+        if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            info "$alias — $_repo not cloned, installing..."
+            if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
+                warn "$alias — $_repo auto-install failed, skipping"
+                continue
+            fi
         fi
+        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" \
+            && { ok "$alias — $_repo updated (not installed)"; log_change "$_repo" "distribute:$alias"; } \
+            || err "$alias — distribution failed"
     done <<< "$(_devices_aliases "$_devices")"
     ok "distribute-only complete"
 }
