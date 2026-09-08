@@ -8,7 +8,8 @@
 # way to distinguish "node down" from "network slow right now").
 # blockdb.sh is owned by noemap (repo-separate); source the INSTALLED copy,
 # never vendored, so this stays a single source of truth (ut#443).
-_NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/noemap}/lib/blockdb.sh"
+_NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/noemap}/lib/core/blockdb.sh"
+[ -f "$_NODES_BLOCKDB" ] || _NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/noemap}/lib/blockdb.sh"
 [ -f "$_NODES_BLOCKDB" ] || die "blockdb.sh not found (noemap not installed?): $_NODES_BLOCKDB"
 # shellcheck source=/dev/null
 . "$_NODES_BLOCKDB"
