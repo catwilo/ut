@@ -9,3 +9,5 @@ audit-report.txt
 .ctx.db
 .ctx.md
 *.bak
+
+*.bak
