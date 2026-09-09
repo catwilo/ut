@@ -8,6 +8,7 @@ cmd_create() {
     [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut create <repo> <tags> \"<description>\""
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
     gh auth status >/dev/null 2>&1 || die "gh not authenticated — run: gh auth login"
+    info "cmd: gh repo create \"$GITHUB_USER/$_repo\" --private --description \"$_desc\""
     info "creating GitHub repo $GITHUB_USER/$_repo..."
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
     printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
@@ -39,6 +40,7 @@ cmd_new() {
     [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut new <repo> <tags> \"<description>\""
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
     gh auth status >/dev/null 2>&1 || die "gh not authenticated -- run: gh auth login"
+    info "cmd: gh repo create \"$GITHUB_USER/$_repo\" --private --description \"$_desc\""
     info "creating GitHub repo $GITHUB_USER/$_repo..."
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
     printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
@@ -74,6 +76,7 @@ cmd_new() {
             warn "$alias -- skipped (unreachable: $ip:$_port)"
             continue
         fi
+        info "cmd: nssh \"$alias\" \"mkdir -p ~/unix-toolkit-tools && git clone git@github.com:$GITHUB_USER/$_repo.git ~/unix-toolkit-tools/$_repo\""
         info "syncing $_repo -> $alias..."
         if nssh "$alias" "mkdir -p ~/unix-toolkit-tools && git clone git@github.com:$GITHUB_USER/$_repo.git ~/unix-toolkit-tools/$_repo" 2>/dev/null; then
             ok "$alias -- $_repo cloned"
@@ -88,6 +91,7 @@ cmd_delete() {
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut delete <repo>"
     grep -q "^$_repo	" "$TSV" || die "$_repo not found in repos.tsv"
+    info "cmd: gh repo delete \"$GITHUB_USER/$_repo\" --yes"
     info "deleting GitHub repo $GITHUB_USER/$_repo..."
     gh repo delete "$GITHUB_USER/$_repo" --yes || die "gh repo delete failed"
     python3 - "$TSV" "$_repo" << 'PYEOF'
@@ -107,6 +111,7 @@ cmd_rename() {
     [ -z "$_old" ] || [ -z "$_new" ] && die "usage: ut rename <old> <new>"
     grep -q "^$_old	" "$TSV" || die "$_old not found in repos.tsv"
     gh auth status >/dev/null 2>&1 || die "gh not authenticated — run: gh auth login"
+    info "cmd: gh repo rename \"$_new\" --repo \"$GITHUB_USER/$_old\" --yes"
     info "renaming GitHub repo $_old -> $_new..."
     gh repo rename "$_new" --repo "$GITHUB_USER/$_old" --yes || die "gh repo rename failed"
     python3 - "$TSV" "$_old" "$_new" << 'PYEOF'

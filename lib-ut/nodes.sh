@@ -183,6 +183,7 @@ cmd_deploy_one() {
     _target="$DST/$_repo"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
     if [ -f "$_target/install.sh" ]; then
+        info "cmd: bash \"$_target/install.sh\""
         info "running install.sh on local..."
         bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
         ok "local install complete"
@@ -218,6 +219,7 @@ cmd_deploy() {
         grep -qxF "$_r" "$_corelist" || continue
         _target="$DST/$_r"
         _reason=$(_repo_is_dirty "$_target") && { warn "$_r  skipped: $_reason"; printf '%s\n' "$_r" >> "$_skipped"; continue; }
+        info "cmd: ut deploy $_r"
         info "deploying $_r..."
         cmd_deploy_one "$_r" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: deploy failed"; printf '%s\n' "$_r" >> "$_skipped"; }
     done
@@ -247,8 +249,10 @@ cmd_distribute() {
             warn "$alias — skipped (unreachable: $ip:$_port)"
             continue
         fi
+        info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
         info "distributing $_repo -> $alias..."
         if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            info "cmd: nssh \"$alias\" \"ut install $_repo\""
             info "$alias — $_repo not cloned, installing..."
             if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
                 warn "$alias — $_repo auto-install failed, skipping"
@@ -282,6 +286,7 @@ cmd_distribute_only_one() {
         fi
         info "distributing $_repo -> $alias (no install)..."
         if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            info "cmd: nssh \"$alias\" \"ut install $_repo\""
             info "$alias — $_repo not cloned, installing..."
             if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
                 warn "$alias — $_repo auto-install failed, skipping"
