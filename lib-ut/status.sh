@@ -95,12 +95,12 @@ cmd_status() {
             [ "$_br" != "main" ] && _flags="${_flags}branch:$_br "
             [ "$_drift" -eq 1 ] && _flags="${_flags}drift "
             [ -n "$_flags" ] && warn "  $_flags"
-            if [ "$_d" -gt 0 ] || [ "$_u" -gt 0 ]; then
-                git -C "$target" status --short 2>/dev/null | while IFS= read -r _line; do
-                    [ -z "$_line" ] && continue
-                    warn "  file:   $_line"
-                done
-            fi
+            info "  cmd: git status --short"
+            git -C "$target" status --short 2>/dev/null | sed 's/^/    /'
+            info "  cmd: git branch -v --no-merged main"
+            git -C "$target" branch -v --no-merged main 2>/dev/null | sed 's/^/    /'
+            info "  cmd: git log --oneline -5"
+            git -C "$target" log --oneline -5 2>/dev/null | sed 's/^/    /'
             if [ -n "$_others" ]; then
                 printf '%s\n' "$_others" | while IFS= read -r _b_name; do
                     [ -z "$_b_name" ] && continue
