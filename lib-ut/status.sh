@@ -20,17 +20,24 @@ repo_state() {
 }
 
 cmd_status() {
-    info "cmd: git -C \"$DST/<repo>\" status --short && git -C \"$DST/<repo>\" branch --format=%(refname:short)"
+    info "cmd: ut sync (actualiza repos.tsv) && git -C \"$DST/<repo>\" status --short"
+    # Step 0: refresh local registry from the cloud registry repo first;
+    # a stale repos.tsv would make every later check lie.
+    if [ -d "$(dirname "$TSV")/.git" ]; then
+        git -C "$(dirname "$TSV")" pull --rebase origin main >/dev/null 2>&1 || true
+    fi
     _remote=0
     case "${1:-}" in --remote) _remote=1; shift ;; esac
     _tag="${1:-}"
     _tmp=$(mktemp); printf "0 0\n" > "$_tmp"
+    _missing_file=$(mktemp); : > "$_missing_file"
     _cloud=$(mktemp); cloud_snapshot "$_cloud"
     repos_for_target "$_tag" | while IFS= read -r repo; do
         read -r _t _i < "$_tmp"; _t=$((_t+1))
         target="$DST/$repo"
         if [ ! -e "$target/.git" ]; then
-            warn "$repo  not cloned"; _i=$((_i+1))
+            warn "$repo  NOT CLONED"; _i=$((_i+1))
+            printf '%s\n' "$repo" >> "$_missing_file"
             printf "%s %s\n" "$_t" "$_i" > "$_tmp"; continue
         fi
         if [ "$_remote" -eq 1 ] && ! git -C "$target" ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
@@ -79,6 +86,13 @@ EOF
         printf "%s %s\n" "$_t" "$_i" > "$_tmp"
     done
     read -r _total _issues < "$_tmp"; rm -f "$_tmp" "$_cloud"
+    if [ -s "$_missing_file" ]; then
+        bold "repos NOT clonados localmente:"
+        sort "$_missing_file" | while IFS= read -r _m; do
+            [ -n "$_m" ] && printf '  %s\n' "$_m"
+        done
+    fi
+    rm -f "$_missing_file"
     _clean=$((_total - _issues))
     bold "[$_total repos]  $_clean clean   $_issues with problems"
 }

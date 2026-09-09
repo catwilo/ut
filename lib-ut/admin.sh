@@ -13,6 +13,13 @@ cmd_create() {
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
     printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
     ok "registered: $_repo in repos.tsv"
+    # Commit and push the registry change immediately so the cloud
+    # repos.tsv stays the source of truth for every node.
+    _tsv_dir="$(dirname "$TSV")"
+    if [ -d "$_tsv_dir/.git" ]; then
+        info "cmd: git -C \"$_tsv_dir\" add repos.tsv && git -C \"$_tsv_dir\" commit -m \"chore(ut): register $_repo\" && git -C \"$_tsv_dir\" push origin main"
+        git -C "$_tsv_dir" add repos.tsv 2>/dev/null             && git -C "$_tsv_dir" commit -m "chore(ut): register $_repo" 2>/dev/null             && git -C "$_tsv_dir" push origin main 2>/dev/null             && ok "repos.tsv pushed to origin"             || warn "repos.tsv push failed -- commit manually"
+    fi
     mkdir -p "$DST"
     if git clone "git@github.com:$GITHUB_USER/$_repo.git" "$DST/$_repo"; then
         ok "$_repo cloned to $DST/$_repo"
@@ -45,6 +52,13 @@ cmd_new() {
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
     printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
     ok "registered: $_repo in repos.tsv"
+    # Commit and push the registry change immediately so the cloud
+    # repos.tsv stays the source of truth for every node.
+    _tsv_dir="$(dirname "$TSV")"
+    if [ -d "$_tsv_dir/.git" ]; then
+        info "cmd: git -C \"$_tsv_dir\" add repos.tsv && git -C \"$_tsv_dir\" commit -m \"chore(ut): register $_repo\" && git -C \"$_tsv_dir\" push origin main"
+        git -C "$_tsv_dir" add repos.tsv 2>/dev/null             && git -C "$_tsv_dir" commit -m "chore(ut): register $_repo" 2>/dev/null             && git -C "$_tsv_dir" push origin main 2>/dev/null             && ok "repos.tsv pushed to origin"             || warn "repos.tsv push failed -- commit manually"
+    fi
     mkdir -p "$DST"
     if ! git clone "git@github.com:$GITHUB_USER/$_repo.git" "$DST/$_repo"; then
         err "$_repo  clone failed"
@@ -65,7 +79,7 @@ cmd_new() {
     git -C "$DST/$_repo" push -u origin main || git -C "$DST/$_repo" push -u origin master || warn "push failed -- run manually"
     ok "initial commit pushed"
 
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/devices.db"
+    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     [ -f "$_devices" ] || { warn "devices.db not found, skipping remote sync"; return 0; }
     _self_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     while IFS='|' read -r alias ip user port _hostkey; do
