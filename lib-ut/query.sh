@@ -89,7 +89,8 @@ cmd_list() {
             return 0
             ;;
         orphans)
-            bold "clones locales no registrados en repos.tsv:"
+            bold "clones locales no registrados en repos.tsv"
+            info "cmd: find $DST -maxdepth 2 -name .git"
             [ -d "$DST" ] || { warn "no existe: $DST"; return 0; }
             _tmp_tsv=$(mktemp)
             tail -n +2 "$TSV" | cut -f1 | sort -u > "$_tmp_tsv"

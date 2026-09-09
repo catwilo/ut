@@ -6,6 +6,7 @@
 
 cmd_sync() {
     _tag="${1:-}"
+    info "cmd: git -C \"$(dirname \"$(realpath \"$0\")\")\" pull --rebase --autostash"
     info "ut — self-update..."
     _self="$(dirname "$(realpath "$0")")"
     _err=$(mktemp "${TMPDIR:-/tmp}/ut-selfupdate-err.XXXXXX")
@@ -23,12 +24,18 @@ cmd_sync() {
         [ "$repo" = "unix-toolkit" ] && continue
         target="$DST/$repo"
         if [ -e "$target/.git" ]; then
-            info "$repo — pulling..."
-            git -C "$target" pull --rebase --autostash 2>/dev/null \
-                && ok "$repo updated" \
-                || { err "$repo — pull failed"; errors=$((errors+1)); }
+            info "cmd: git -C \"$target\" pull --rebase --autostash"
+            if ! git -C "$target" pull --rebase --autostash 2>/dev/null; then
+                info "cmd: git -C \"$target\" branch --set-upstream-to=origin/main main"
+                git -C "$target" branch --set-upstream-to=origin/main main 2>/dev/null \
+                    && git -C "$target" pull --rebase --autostash 2>/dev/null \
+                    && ok "$repo updated" \
+                    || { err "$repo — pull failed"; errors=$((errors+1)); }
+            else
+                ok "$repo updated"
+            fi
         else
-            info "$repo — cloning..."
+            info "cmd: git clone git@github.com:$GITHUB_USER/$repo.git \"$target\""
             git clone "git@github.com:$GITHUB_USER/$repo.git" "$target" \
                 && ok "$repo cloned" \
                 || { err "$repo — clone failed"; errors=$((errors+1)); }
@@ -120,7 +127,7 @@ cmd_clone() {
         if [ -e "$target/.git" ]; then
             info "$repo — already cloned, skipping"
         else
-            info "$repo — cloning..."
+            info "cmd: git clone git@github.com:$GITHUB_USER/$repo.git \"$target\""
             git clone "git@github.com:$GITHUB_USER/$repo.git" "$target" \
                 && ok "$repo cloned" \
                 || { err "$repo — clone failed"; errors=$((errors+1)); }
