@@ -1,7 +1,23 @@
 # COMMAND SUGGESTION FORMAT SPEC — Enterprise Standard
 
 Code, variables, comments: English. Conversational reply: Spanish.
-Tools: mkit, miko, ut, nina, nssh, nscp, maid.
+
+Tools:
+  mkit  atomic file edits
+  miko  task lifecycle
+  ut    repo registry
+  nina  device discovery/connection
+  nssh  remote shell
+  nscp  remote copy
+  maid  recoverable delete
+
+Rule: first action for any tool is its --help.
+
+Corrections: never edit tool files manually. Read the module tree, find
+the owning module, fix the binary, test it, then ship to main.
+
+Installers: always symlink to repo binaries. Never copy binaries. This
+is the standard for every project and tool.
 
 ## IDENTITY
 
