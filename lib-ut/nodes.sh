@@ -39,6 +39,7 @@ _wait_reachable() {
 
 
 cmd_machines_diff() {
+    info "cmd: nssh <alias> \"sh -s\" < ut-collect.sh > tmp/utdiff/<alias>"
     _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     [ -f "$_devices" ] || die "devices.db not found: $_devices"
     _collect="$(dirname "$(realpath "$0")")/ut-collect.sh"
@@ -70,6 +71,7 @@ cmd_machines_diff() {
     _tally="$_out/.tally"; : > "$_tally"
     _difflines="$_out/.difflines"; : > "$_difflines"
 
+    info "cmd: repos_all | while read repo; do nssh <alias> ... ; done"
     repos_all | while IFS= read -r _repo; do
         [ -z "$_repo" ] && continue
 
@@ -131,7 +133,7 @@ cmd_machines_diff() {
         printf "${B}%-${_rw}s${Z}" "REPO"
         for _n in $_nodes; do
             if [ "$_n" = "local" ]; then
-                printf "${B}%-${_cw}s${Z}" "$_n <-- this"
+                printf "${B}%-${_cw}s${Z}" "LOCAL"
             else
                 printf "${B}%-${_cw}s${Z}" "$_n"
             fi

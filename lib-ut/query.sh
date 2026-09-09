@@ -71,6 +71,7 @@ cmd_list() {
     case "$_tag" in
         cloud)
             gh auth status >/dev/null 2>&1 || die "gh not authenticated -- run: gh auth login"
+            info "cmd: gh repo list \"$GITHUB_USER\" --limit 200 --json name --jq '.[].name'"
             bold "repos en GitHub ($GITHUB_USER):"
             gh repo list "$GITHUB_USER" --limit 200 --json name --jq '.[].name' | sort | while IFS= read -r _r; do
                 printf "  %s\n" "$_r"
@@ -78,6 +79,7 @@ cmd_list() {
             return 0
             ;;
         local)
+            info "cmd: find \"$DST\" -maxdepth 2 -name .git"
             bold "repos clonados en local ($DST):"
             [ -d "$DST" ] || { warn "no existe: $DST"; return 0; }
             ( cd "$DST" && for _d in */; do
