@@ -284,7 +284,7 @@ cmd_distribute_only_one() {
             warn "$alias — skipped (unreachable: $ip:$_port)"
             continue
         fi
-        info "distributing $_repo -> $alias (no install)..."
+        info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
         if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
             info "cmd: nssh \"$alias\" \"ut install $_repo\""
             info "$alias — $_repo not cloned, installing..."
@@ -297,12 +297,12 @@ cmd_distribute_only_one() {
             && { ok "$alias — $_repo updated (not installed)"; log_change "$_repo" "distribute:$alias"; } \
             || err "$alias — distribution failed"
     done <<< "$(_devices_aliases "$_devices")"
-    ok "distribute-only complete"
+    ok "distribute complete (no install)"
 }
 
-cmd_distribute_only() {
+cmd_distribute_no_install() {
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute-only <repo|all>"
+    [ -z "$_repo" ] && die "usage: ut distribute --no-install <repo|all>"
     if [ "$_repo" != "all" ]; then
         cmd_distribute_only_one "$_repo"
         return 0
@@ -317,5 +317,5 @@ cmd_distribute_only() {
     done
     _nok=$(wc -l < "$_ok" | tr -d ' '); _nskip=$(wc -l < "$_skipped" | tr -d ' ')
     rm -f "$_ok" "$_skipped"
-    bold "distribute-only all: $_nok distributed, $_nskip skipped"
+    bold "distribute (no install) all: $_nok distributed, $_nskip skipped"
 }
