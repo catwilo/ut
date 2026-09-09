@@ -85,7 +85,7 @@ print_help() {
   printf "                                   solo 'ut ship'; 'ut info <repo>' lo dice)\n"
   printf "  ut deploy all                -- igual, pero solo en repos con tag 'core'\n"
   printf "                                  (los demas: 'ut deploy <repo>' manual)\n"
-  printf "  ut distribute-only <repo>    -- copia el repo a los nodos, sin instalar\n"
+  printf "  ut distribute --no-install <repo>    -- copia el repo a los nodos, sin instalar\n"
   printf "\nFLUJO ESTANDAR de un fix\n"
   printf "  1. ut branch <repo> fix/nombre  -- pull+rebase + crea la rama\n"
   printf "                                     (autostash automatico: si hay\n"
@@ -129,8 +129,14 @@ case "$CMD" in
     info)       cmd_info       "$@" ;;
     ship)       cmd_ship       "$@" ;;
     branch)     cmd_branch     "$@" ;;
-    distribute) cmd_distribute "$@" ;;
+    distribute)
+        if [ "${2:-}" = "--no-install" ]; then
+            shift 2
+            cmd_distribute_no_install "$@"
+        else
+            cmd_distribute "$@"
+        fi
+        ;;
     deploy)     cmd_deploy     "$@" ;;
-    distribute-only) cmd_distribute_only "$@" ;;
     *) err "unknown command: $CMD"; print_help; exit 1 ;;
 esac
