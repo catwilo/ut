@@ -83,6 +83,8 @@ cmd_status() {
         [ -s "$_cloud" ] && ! grep -qx "$repo" "$_cloud" && _drift=1
         if [ "$_d" -eq 0 ] && [ "$_u" -eq 0 ] && [ "$_a" -eq 0 ] && [ "$_b" -eq 0 ] && [ "$_s" -eq 0 ] && [ "$_br" = "main" ] && [ -z "$_others" ] && [ "$_drift" -eq 0 ]; then
             ok "$repo  clean"
+            info "  cmd: git log --oneline -5"
+            git -C "$target" log --oneline -5 2>/dev/null | sed 's/^/    /'
         else
             _i=$((_i+1))
             bold "$repo"
