@@ -58,3 +58,4 @@ restaurante-oculto	client	App de reservas para restaurante	active
 clubDeLectura	client	club de lectura -- documentacion de cliente, ideas y gestion de biblioteca	active
 campana	project,client,multimedia	Arquitectura multimedia, redes sociales y documentacion de proyectos	active
 debux	tool,env	minimal graphical Linux environment for web dev from Android
+gya	tool	wrapper CLI para gallery-dl + yt-dlp en Termux
