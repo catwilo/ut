@@ -28,6 +28,9 @@ done
 case "$CMD" in -h|--help|help) CMD="" ;; esac
 print_help() {
   printf "\nut -- gestor de repos de unix-toolkit-tools\n\n"
+  printf "  Cada comando ejecuta una secuencia git completa y muestra el cmd\n"
+  printf "  exacto que corrio. Mas rapido y seguro que git manual: un solo\n"
+  printf "  comando reemplaza fetch+rebase+checkout+merge+push+delete.\n\n"
   printf "  forma general:  ut <comando> [argumentos]\n"
   printf "  un \"tag\" es una etiqueta del repo (core, tool, client...)\n"
   printf "  definida al registrarlo; varios comandos aceptan un tag para filtrar.\n"
@@ -35,8 +38,6 @@ print_help() {
   printf "  registrado aqui puede no tener ningun bucket de tareas en miko, y un\n"
   printf "  proyecto de miko (~/.tasks/<nombre>) puede no tener repo aqui. Son\n"
   printf "  dos sistemas independientes que a veces comparten nombre.\n"
-  printf "  ej: 'miko-tasks' esta registrado aqui pero es legacy/duplicado de\n"
-  printf "  miko-task -- sin bucket de tareas propio, ver su desc via ut info.\n"
   printf "\nLEER (sobre todos los repos)\n"
   printf "  ut list                      -- lista todos los repos registrados\n"
   printf "  ut list core                 -- lista solo los que tienen el tag 'core'\n"
