@@ -63,6 +63,7 @@ PYEOF
 }
 
 cmd_remove() {
+    info "cmd: git -C \"$DST/$_repo\" status --short && maid trash \"$DST/$_repo\""
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut remove <repo>"
     target="$DST/$_repo"

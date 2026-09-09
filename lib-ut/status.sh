@@ -20,6 +20,7 @@ repo_state() {
 }
 
 cmd_status() {
+    info "cmd: git -C \"$DST/<repo>\" status --short && git -C \"$DST/<repo>\" branch --format=%(refname:short)"
     _remote=0
     case "${1:-}" in --remote) _remote=1; shift ;; esac
     _tag="${1:-}"
