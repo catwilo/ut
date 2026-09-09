@@ -8,9 +8,9 @@
 # way to distinguish "node down" from "network slow right now").
 # blockdb.sh is owned by noemap (repo-separate); source the INSTALLED copy,
 # never vendored, so this stays a single source of truth (ut#443).
-_NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/noemap}/lib/core/blockdb.sh"
-[ -f "$_NODES_BLOCKDB" ] || _NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/noemap}/lib/blockdb.sh"
-[ -f "$_NODES_BLOCKDB" ] || die "blockdb.sh not found (noemap not installed?): $_NODES_BLOCKDB"
+_NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/core/blockdb.sh"
+[ -f "$_NODES_BLOCKDB" ] || _NODES_BLOCKDB="${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/blockdb.sh"
+[ -f "$_NODES_BLOCKDB" ] || die "blockdb.sh not found (nina not installed?): $_NODES_BLOCKDB"
 # shellcheck source=/dev/null
 . "$_NODES_BLOCKDB"
 
@@ -39,7 +39,7 @@ _wait_reachable() {
 
 
 cmd_machines_diff() {
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/devices.db"
+    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     [ -f "$_devices" ] || die "devices.db not found: $_devices"
     _collect="$(dirname "$(realpath "$0")")/ut-collect.sh"
     [ -f "$_collect" ] || die "ut-collect.sh not found: $_collect"
@@ -158,7 +158,7 @@ cmd_machines_diff() {
 
 cmd_machines() {
     [ "${1:-}" = diff ] && { cmd_machines_diff; return 0; }
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/devices.db"
+    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     _hosts="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/hosts.db"
     [ -f "$_devices" ] || die "devices.db not found: $_devices"
     [ -f "$_hosts" ]   || die "hosts.db not found: $_hosts"
@@ -231,7 +231,7 @@ cmd_distribute() {
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut distribute <repo>"
     _rbase="unix-toolkit-tools/$_repo"
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/devices.db"
+    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     [ -f "$_devices" ] || die "devices.db not found: $_devices"
     _self_alias=""
     while IFS= read -r alias; do
@@ -265,7 +265,7 @@ cmd_distribute() {
 cmd_distribute_only_one() {
     _repo="$1"
     _rbase="unix-toolkit-tools/$_repo"
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/devices.db"
+    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
     [ -f "$_devices" ] || die "devices.db not found: $_devices"
     while IFS= read -r alias; do
         [ -z "$alias" ] && continue

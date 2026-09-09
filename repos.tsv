@@ -1,6 +1,6 @@
 name	tags	description	state
 clipso	tool,cli,core	clipboard universal OSC52+xclip+pbcopy	active
-noemap	tool,net,core	device alias manager for multi-machine setups	active
+nina	tool,net,core	device alias manager for multi-machine setups	active
 maid-chan	tool,cli,core	trash and zsh history manager	active
 nvim-setup	cfg,core	neovim setup and config installer	active
 zsh-setup	cfg,core	zsh setup + macOS bootstrap (--mac: Nix/deps/PATH/clipboard)	active
