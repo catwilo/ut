@@ -64,8 +64,8 @@ print_help() {
   printf "\nREGISTRO (edita repos.tsv)\n"
   printf "  ut add <repo> <tags> '<desc>'  -- registra un repo nuevo\n"
   printf "                                  ej: ut add miau-dio audio 'sintesis CLI'\n"
-  printf "  ut rm <repo>                 -- quita el repo del registro\n"
-  printf "  ut remove <repo>            -- borra el clon local (recuperable), GitHub y registro intactos\n"
+  printf "  ut untrack <repo>            -- quita el repo de repos.tsv (no toca clon ni GitHub)\n"
+  printf "  ut unclone <repo>            -- mueve el clon local a trash (no toca repos.tsv ni GitHub)\n"
   printf "  ut tag <repo> +<tag>         -- agrega un tag     ej: ut tag clipso +core\n"
   printf "  ut tag <repo> -<tag>         -- quita un tag      ej: ut tag clipso -core\n"
   printf "  ut pause <repo>              -- marca el repo como pausado\n"
@@ -118,6 +118,8 @@ case "$CMD" in
     diff)     cmd_diff     "$@" ;;
     tag)      cmd_tag      "$@" ;;
     add)      cmd_add      "$@" ;;
+    untrack)  cmd_untrack  "$@" ;;
+    unclone)  cmd_unclone  "$@" ;;
     rm)       cmd_rm       "$@" ;;
     remove)   cmd_remove   "$@" ;;
     machines) cmd_machines "$@" ;;

@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-# lib-ut/registry.sh -- edits repos.tsv: tag, add, rm, remove, pause,
+# lib-ut/registry.sh -- edits repos.tsv: tag, add, untrack, unclone, pause,
 # resume, archive, info
 # sourced by ./ut; expects $TSV, $DST set by the entrypoint
+#
+# SCOPE TABLE -- three distinct operations, do not confuse them:
+#   ut untrack <repo>  ->  repos.tsv ONLY. Leaves clone and GitHub intact.
+#   ut unclone <repo>  ->  local clone moved to trash ONLY. Leaves repos.tsv
+#                          and GitHub intact. Recoverable via maid restore.
+#   ut delete  <repo>  ->  GitHub + repos.tsv + local clone (see admin.sh).
+#                          Destructive and irreversible on GitHub.
+# Legacy aliases (deprecated, keep working for one cycle):
+#   ut rm     == ut untrack
+#   ut remove == ut unclone
 
 cmd_tag() {
     # ut tag <repo> <+tag|-tag>
@@ -48,9 +58,12 @@ cmd_add() {
     ok "added: $_repo [$_tags]"
 }
 
-cmd_rm() {
+cmd_untrack() {
+    # ut untrack <repo> -- removes repo from repos.tsv ONLY.
+    # Does NOT touch the local clone and does NOT touch GitHub.
+    # If you want to nuke everything, see: ut delete (admin.sh).
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut rm <repo>"
+    [ -z "$_repo" ] && die "usage: ut untrack <repo>"
     grep -q "^$_repo	" "$TSV" || die "$_repo not found in repos.tsv"
     python3 - "$TSV" "$_repo" << 'PYEOF'
 import sys
@@ -59,14 +72,20 @@ lines = [l for l in open(tsv).readlines() if not l.startswith(repo + "\t")]
 open(tsv, "w").writelines(lines)
 print(f"ok: {repo} removed from repos.tsv")
 PYEOF
-    warn "local clone NOT removed — delete $DST/$_repo manually if needed"
+    warn "local clone NOT removed -- delete $DST/$_repo manually if needed"
 }
 
-cmd_remove() {
-    info "cmd: git -C \"$DST/$_repo\" status --short && maid trash \"$DST/$_repo\""
+# DEPRECATED: kept one cycle for backwards compatibility. Use 'ut untrack'.
+cmd_rm() { warn "ut rm is deprecated, use: ut untrack"; cmd_untrack "$@"; }
+
+cmd_unclone() {
+    # ut unclone <repo> -- moves the LOCAL clone to trash ONLY.
+    # Leaves repos.tsv and GitHub intact. Recoverable via maid restore.
+    # If you want to nuke everything, see: ut delete (admin.sh).
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut remove <repo>"
+    [ -z "$_repo" ] && die "usage: ut unclone <repo>"
     target="$DST/$_repo"
+    info "cmd: git -C \"$target\" status --short && maid trash \"$target\""
     [ -e "$target/.git" ] || die "$_repo not cloned locally at $target"
     _ahead=$(git -C "$target" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
     _dirty=$(git -C "$target" status --short 2>/dev/null | wc -l | tr -d ' ')
@@ -81,6 +100,9 @@ cmd_remove() {
     fi
     maid trash "$target" && ok "$_repo removed locally (recoverable via maid restore) -- still in GitHub" || err "$_repo -- trash failed"
 }
+
+# DEPRECATED: kept one cycle for backwards compatibility. Use 'ut unclone'.
+cmd_remove() { warn "ut remove is deprecated, use: ut unclone"; cmd_unclone "$@"; }
 
 cmd_pause() {
     _repo="${1:-}"; [ -z "$_repo" ] && die "usage: ut pause <repo>"
