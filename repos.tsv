@@ -47,3 +47,4 @@ campana	project,client,multimedia	Arquitectura multimedia, redes sociales y docu
 debux	tool,env	minimal graphical Linux environment for web dev from Android
 gya	tool	wrapper CLI para gallery-dl + yt-dlp en Termux
 hardware-bom	core,infra,rpx-report	Bill of Materials de hardware compartido: BaquiaRaudal + proyecto rack sobre infraestructura multiproposito	active
+orcdroid	tool core	Android remoto en Oracle Cloud via Waydroid y Sunshine	active
