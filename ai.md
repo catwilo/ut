@@ -293,8 +293,10 @@ not a repo, path: `~/.tasks/miko-geral`.
     `git -C <repopath> branch -v --no-merged main`
     `git -C <repopath> status --short`
   `miko -h` and `ut -h`, each once per conversation, own block, before the repo-open block.
-- Close: `miko session-close` — pending tasks, sync, dirty repos.
-  Session close is confirmed only by this output.
+- Close:
+    `ut sync`        -- actualiza ut + sincroniza todos los repos
+    `miko sync`      -- sincroniza tareas de miko (local + nodos remotos)
+    `miko status`    -- confirma que no quedan repos dirty
 
 ## RISK
 
