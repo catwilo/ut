@@ -10,9 +10,7 @@ aicli	tool,cli	AI CLI tool	active
 audit-privacy	sec,core	privacy audit tool	active
 wlab	tool	workbench and lab repo	active
 neko	tool	neko project	active
-neko-gba	game	neko GBA project	active
 streaming	svc	streaming setup	active
-rwxdir	util	directory permission tool	active
 rsync-folder	util	rsync wrapper	active
 sftp-folder	util	sftp wrapper	active
 qemu-debian-mac	infra	QEMU Debian on Mac setup	active
@@ -20,36 +18,25 @@ persistent-container-podman	infra	persistent podman containers	active
 spfx-tool	tool	SPFx SharePoint development tool	active
 wifi-setup	infra,net	RTL wifi driver setup and deploy	active
 miko	tool,core	task manager + ctx owner	active
-prestamos	client	Go+Docker loan management app with REST API and websockets	active
 prestamos-lc	client	Go+Redis+pgbouncer loan system LC version	active
-districarnesVera	client	Hugo web app for carnes Vera -- login and inventory	active
 supbot-cli	client,bot,core	Node.js WhatsApp CLI -- send, inbox, contacts	active
-sibarita-site	client,web	Eleventy+Bootstrap site for sibarita restaurant	active
-microcemento-site	client,web	Eleventy+Bootstrap site for microcemento client	active
 correccionLatex	client,arc	LaTeX university stats assignment correction -- closed	archived
 aliceboard	tool,android	Android keyboard (Unexpected Keyboard base, GPL-3) with single-finger shell/SSH layout	active
 hotspot	tool,net	hotspot manager via nmcli (anita/up/down/status/remove)	active
 deadd-setup	cfg,tool	deadd notification center config + scripts	active
 ppoint-tool	tool,cli,core	Presentation engine: Markdown+Frontmatter to PPTX/PDF/HTML	active
 RoomBookingDashboard	client,web	SPFx room reservation dashboard for client tenant	active
-predicciones-evento	client,web	Formulario de pronósticos deportivos para eventos presenciales vía QR	active
 mkit	tool,cli,core	LLM file ops toolkit -- anchor/write/patch/verify CLI	active
 miau-dio	audio,core	CLI modular para sintesis y gestion de ideas musicales	active
 ecosystem-spec	docs	especificacion tecnica del ecosistema unix-toolkit	active
 BaquiaRaudal	client,web	Multi-tenant business OS (NestJS+Next.js+Neon) -- MVP: plant inventory catalog	active
 es3c28p-firmware	firmware,esp32,embedded,audio,display,ble,es3c28p	Professional C firmware for ES3C28P (ESP32-S3) board using ESP-IDF 5.5	active
-kakaw	client,web,agro	Registro sanitario y de insumos por lote para fincas cacaoteras -- captura offline, analisis en servidor	active
 report-studio	core,tool,docs	sistema documental estandar para reportes institucionales de cualquier tipo/tema/asociacion	active
-ASAMTEFUR	client,docs	Reportes institucionales ASAMTEFUR (trimestral, anual, etc.)	active
 biblio-convocat	client,docs,rpx-report	convocatoria biblioteca municipal cultura llanera	active
 ut	core,tool	self-hosted repo manager and dev toolkit root	active
 anydesk-install	uncat	uncatalogued -- pending review	active
 catwilo	uncat,core	uncatalogued -- pending review	active
-thumb-key	uncat	uncatalogued -- pending review	active
-meu-report	proyecto,informe,rpx-report	Reporte de avance individual	active
-acionasoci	tool,client	base de datos centralizada de la asociacion	active
 lucituris	docs,client,rpx-report	reporte rpx	active
-asamtefur-ingreso-salida	client,rpx-report	planteamiento de proyecto ingreso-salida ASAMTEFUR	active
 asamtefur-registro	app,react-native	App React Native para registro de jornadas de trabajo en el predio de ASAMTEFUR	active
 prometeia	client	CRM para idea de empresa	active
 monetizar-personal	personal	proyectos y tareas para monetizacion personal	active
