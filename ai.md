@@ -139,6 +139,8 @@ Observed behavioral violations and fixes:
 
 6. **Mechanism extension over creation**: Extend existing mechanisms in the correct module (e.g., node_alias() in identity.sh) instead of creating new ones when the existing solution already resolves the problem.
 
+7. **Scoped sync (no global sync by default)**: Sync operations are always scoped to the repo(s) touched in the session. Never run `ut sync`, `ut sync <tag>`, `miko sync`, or `miko sync -P all` unless the user explicitly requests it. Use `miko sync -r <repo>` (chained with && for multiple repos). Global sync contaminates context with unrelated projects and is forbidden by default.
+
 ## EXECUTION CONVENTIONS
 
 - Pair every state change with its verification in the same block.
@@ -185,7 +187,7 @@ Task lifecycle runs through miko (help-before-use applies). Each task:
 type (BUG/FEAT/CHORE/DESIGN), exact reproducible symptom, root cause if
 known, expected behavior. For destructive task operations, create new
 state first, verify it exists, then destroy the old (miko is atomic).
-Tasks are manageable from any node; sync reconciles across all.
+Tasks are manageable from any node; `miko sync -r <repo>` reconciles them per repo (never a global sync).
 
 New-repo onboarding is two separate registrations, not one:
 `ut new`/`ut create` registers the repo in `ut`'s own registry
@@ -199,7 +201,7 @@ never in repos.tsv.
 ## DEPLOYMENT
 
 Strict order: ship → deploy → sync. ship merges+pushes; deploy installs
-across all nodes; sync reconciles tasks only after new state is live.
+across all nodes; `miko sync -r <repo>` reconciles tasks (scoped) only after new state is live.
 A fix to a shared tool is complete only once deployed on every node using
 it.
 Source of truth: the repo (`~/unix-toolkit-tools/<tool>`), never
@@ -228,7 +230,7 @@ Per-fix flow:
 8. pull the full task list for the repo
 9. mark each task resolved by this deploy as done
 10. Confirm whether to continue or open another repo before syncing
-11. sync last, on confirmation
+11. sync last, on confirmation -- `miko sync -r <repo>` scoped to the repo(s) touched
 
 - Before any push: `git diff --stat origin/main`.
 - `git push --force` / `--force-with-lease`: explicit request only.
@@ -282,6 +284,12 @@ warn only.
 
 ## SESSION
 
+Binding: session-open and session-close operations are ALWAYS scoped to
+the repo(s) actually touched. Never run a global sync across all projects
+(`ut sync`, `ut sync <tag>`, `miko sync`, `miko sync -P all`) unless the
+user explicitly requests it in the moment. Prefer `miko sync -r <repo>`.
+See "Sync scope" under Close below.
+
 `miko-geral` is miko's own internal bucket for general/unassigned tasks --
 not a repo, path: `~/.tasks/miko-geral`.
 
@@ -293,10 +301,28 @@ not a repo, path: `~/.tasks/miko-geral`.
     `git -C <repopath> branch -v --no-merged main`
     `git -C <repopath> status --short`
   `miko -h` and `ut -h`, each once per conversation, own block, before the repo-open block.
-- Close:
-    `ut sync`        -- actualiza ut + sincroniza todos los repos
-    `miko sync`      -- sincroniza tareas de miko (local + nodos remotos)
-    `miko status`    -- confirma que no quedan repos dirty
+- Close (SCOPED ONLY -- see "Sync scope" below):
+    `miko sync -r <repo>`   -- sincroniza tareas SOLO del repo trabajado
+    `miko status`           -- confirma que no quedan repos dirty
+
+- Sync scope (binding rule):
+  Sync must ALWAYS be scoped to the repo(s) actually touched in the
+  session. Never run a global sync for every project.
+
+  FORBIDDEN by default:
+    `ut sync`              -- syncs ALL repos
+    `ut sync <tag>`        -- syncs every repo with that tag
+    `miko sync`            -- syncs ALL task buckets, all nodes
+    `miko sync -P all`     -- fans out to every node for every repo
+
+  REQUIRED instead:
+    `miko sync -r <repo>`  -- one repo, local + remote nodes
+    `miko sync -r <repo1> && miko sync -r <repo2>`  -- explicit chain
+                              for the exact set of repos touched.
+
+  `ut` has no per-repo sync; if a repo needs pushing after `ut ship`, it
+  is already pushed by ship itself. Do NOT call `ut sync` to "confirm".
+  Only run a global sync on an explicit, in-the-moment user request.
 
 ## RISK
 
