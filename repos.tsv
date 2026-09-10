@@ -59,3 +59,4 @@ clubDeLectura	client	club de lectura -- documentacion de cliente, ideas y gestio
 campana	project,client,multimedia	Arquitectura multimedia, redes sociales y documentacion de proyectos	active
 debux	tool,env	minimal graphical Linux environment for web dev from Android
 gya	tool	wrapper CLI para gallery-dl + yt-dlp en Termux
+hardware-bom	core,infra,rpx-report	Bill of Materials de hardware compartido: BaquiaRaudal + proyecto rack sobre infraestructura multiproposito	active
