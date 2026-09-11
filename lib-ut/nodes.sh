@@ -30,6 +30,27 @@ _devices_aliases() {
     '
 }
 
+# _nodes_db -- tailscale-first device table. Returns ts-devices.db whenever
+# it exists and is non-empty (tailscale-first policy: devices.db is purged of
+# WLAN rows when tailscale is active), falling back to devices.db otherwise.
+# Consumers iterating "every known node" must use this and never devices.db
+# directly (ut#--: distribute/machines silently skipped tailscale-only peers).
+_nodes_db() {
+    _ndb_dir="${NOEMAP_HOME:-$HOME/.local/share/nina}/state"
+    if [ -f "$_ndb_dir/ts-devices.db" ] && [ -s "$_ndb_dir/ts-devices.db" ]; then
+        printf '%s\n' "$_ndb_dir/ts-devices.db"
+    else
+        printf '%s\n' "$_ndb_dir/devices.db"
+    fi
+}
+
+# _all_nodes_aliases -- every alias in the tailscale-first device table.
+_all_nodes_aliases() {
+    _andb="$(_nodes_db)"
+    [ -f "$_andb" ] || return 0
+    _devices_aliases "$_andb"
+}
+
 _wait_reachable() {
     _ip="$1" _p="$2"
     nc -z -w5 "$_ip" "$_p" >/dev/null 2>&1 && return 0
@@ -40,8 +61,8 @@ _wait_reachable() {
 
 cmd_machines_diff() {
     info "cmd: nssh <alias> \"sh -s\" < ut-collect.sh > tmp/utdiff/<alias>"
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
-    [ -f "$_devices" ] || die "devices.db not found: $_devices"
+    _devices="$(_nodes_db)"
+    [ -f "$_devices" ] || die "device table not found: $_devices"
     _collect="$(dirname "$(realpath "$0")")/ut-collect.sh"
     [ -f "$_collect" ] || die "ut-collect.sh not found: $_collect"
     mkdir -p "$HOME/tmp"; _out="$HOME/tmp/utdiff"; rm -rf "$_out"; mkdir -p "$_out"
@@ -59,7 +80,7 @@ cmd_machines_diff() {
             : > "$_out/$alias"; printf 'UNREACH\n' > "$_out/$alias.flag"
             _nodes="$_nodes $alias"
         fi
-    done <<< "$(_devices_aliases "$_devices")"
+    done <<< "$(_all_nodes_aliases)"
 
     # ------------------------------------------------------------------
     # Only out-of-sync repos are printed; a repo identical on every node is
@@ -160,9 +181,9 @@ cmd_machines_diff() {
 
 cmd_machines() {
     [ "${1:-}" = diff ] && { cmd_machines_diff; return 0; }
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
-    _hosts="${NOEMAP_HOME:-$HOME/.local/share/noemap}/state/hosts.db"
-    [ -f "$_devices" ] || die "devices.db not found: $_devices"
+    _devices="$(_nodes_db)"
+    _hosts="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/hosts.db"
+    [ -f "$_devices" ] || die "device table not found: $_devices"
     [ -f "$_hosts" ]   || die "hosts.db not found: $_hosts"
     while IFS= read -r alias; do
         [ -z "$alias" ] && continue
@@ -177,7 +198,7 @@ cmd_machines() {
         else
             err "$alias — unreachable"
         fi
-    done <<< "$(_devices_aliases "$_devices")"
+    done <<< "$(_all_nodes_aliases)"
 }
 
 cmd_deploy_one() {
@@ -235,8 +256,8 @@ cmd_distribute() {
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut distribute <repo>"
     _rbase="unix-toolkit-tools/$_repo"
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
-    [ -f "$_devices" ] || die "devices.db not found: $_devices"
+    _devices="$(_nodes_db)"
+    [ -f "$_devices" ] || die "device table not found: $_devices"
     _self_alias=""
     while IFS= read -r alias; do
         [ -z "$alias" ] && continue
@@ -261,18 +282,25 @@ cmd_distribute() {
                 continue
             fi
         fi
-        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main && { [ ! -f ~/$_rbase/install.sh ] || ~/$_rbase/install.sh; }" \
-            && { ok "$alias — $_repo updated"; log_change "$_repo" "distribute:$alias"; } \
-            || err "$alias — distribution failed"
-    done <<< "$(_devices_aliases "$_devices")"
+        _local_head="$(git -C "$DST/$_repo" rev-parse HEAD 2>/dev/null || printf '')"
+        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main && { [ ! -f ~/$_rbase/install.sh ] || bash ~/$_rbase/install.sh; }" \
+            || { err "$alias — distribution failed"; continue; }
+        _remote_head="$(nssh "$alias" "git -C ~/$_rbase rev-parse HEAD" 2>/dev/null || printf '')"
+        if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
+            err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
+            continue
+        fi
+        ok "$alias — $_repo updated (HEAD $_remote_head)"
+        log_change "$_repo" "distribute:$alias"
+    done <<< "$(_all_nodes_aliases)"
     ok "distribute complete"
 }
 
 cmd_distribute_only_one() {
     _repo="$1"
     _rbase="unix-toolkit-tools/$_repo"
-    _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
-    [ -f "$_devices" ] || die "devices.db not found: $_devices"
+    _devices="$(_nodes_db)"
+    [ -f "$_devices" ] || die "device table not found: $_devices"
     while IFS= read -r alias; do
         [ -z "$alias" ] && continue
         _doBlk="$(blockdb_get "$_devices" alias "$alias")"
@@ -295,10 +323,17 @@ cmd_distribute_only_one() {
                 continue
             fi
         fi
+        _local_head="$(git -C "$DST/$_repo" rev-parse HEAD 2>/dev/null || printf '')"
         nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" \
-            && { ok "$alias — $_repo updated (not installed)"; log_change "$_repo" "distribute:$alias"; } \
-            || err "$alias — distribution failed"
-    done <<< "$(_devices_aliases "$_devices")"
+            || { err "$alias — distribution failed"; continue; }
+        _remote_head="$(nssh "$alias" "git -C ~/$_rbase rev-parse HEAD" 2>/dev/null || printf '')"
+        if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
+            err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
+            continue
+        fi
+        ok "$alias — $_repo updated (not installed, HEAD $_remote_head)"
+        log_change "$_repo" "distribute:$alias"
+    done <<< "$(_all_nodes_aliases)"
     ok "distribute complete (no install)"
 }
 
