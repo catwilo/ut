@@ -48,3 +48,4 @@ debux	tool,env	minimal graphical Linux environment for web dev from Android
 gya	tool	wrapper CLI para gallery-dl + yt-dlp en Termux
 hardware-bom	core,infra,rpx-report	Bill of Materials de hardware compartido: BaquiaRaudal + proyecto rack sobre infraestructura multiproposito	active
 orcdroid	tool core	Android remoto en Oracle Cloud via Waydroid y Sunshine	active
+termux-node	util,core	Termux no-root bootstrap: base packages + runit services (sshd) + tools	active

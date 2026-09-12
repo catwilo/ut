@@ -6,7 +6,7 @@
 
 cmd_sync() {
     _tag="${1:-}"
-    info "cmd: git -C \"$(dirname \"$(realpath \"$0\")\")\" pull --rebase --autostash"
+    info "cmd: git -C $(dirname "$(realpath "$0")") pull --rebase --autostash"
     info "ut — self-update..."
     _self="$(dirname "$(realpath "$0")")"
     _err=$(mktemp "${TMPDIR:-/tmp}/ut-selfupdate-err.XXXXXX")

@@ -275,6 +275,10 @@ cmd_distribute() {
         info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
         info "distributing $_repo -> $alias..."
         if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            # Refresh the remote ut first: its repos.tsv must carry this
+            # repo before `ut install` can resolve it. Without this, a repo
+            # registered only locally fails to install on peers.
+            nssh "$alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
             info "cmd: nssh \"$alias\" \"ut install $_repo\""
             info "$alias — $_repo not cloned, installing..."
             if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
@@ -316,6 +320,9 @@ cmd_distribute_only_one() {
         fi
         info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
         if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
+            # Refresh the remote ut first: its repos.tsv must carry this
+            # repo before `ut install` can resolve it.
+            nssh "$alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
             info "cmd: nssh \"$alias\" \"ut install $_repo\""
             info "$alias — $_repo not cloned, installing..."
             if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
