@@ -50,28 +50,28 @@ PYEOF
 }
 
 # repo_url <repo> -- resolve the git clone URL for a repo name.
-# A name containing "/" is treated as "owner/repo" (external/shared repo).
-# A plain name is treated as a local repo owned by $GITHUB_USER.
+# The owner is read from repos.tsv column 5 (defaults to $GITHUB_USER).
 # Single source of truth for URL construction; callers must not
 # interpolate $GITHUB_USER themselves (ut#615).
 repo_url() {
     _ru_repo="$1"
-    case "$_ru_repo" in
-        */*) printf 'git@github.com:%s.git\n' "$_ru_repo" ;;
-        *)   printf 'git@github.com:%s/%s.git\n' "$GITHUB_USER" "$_ru_repo" ;;
-    esac
+    _ru_owner=$(awk -F'\t' -v r="$_ru_repo" '$1==r {print $5; exit}' "$TSV")
+    [ -z "$_ru_owner" ] && _ru_owner="$GITHUB_USER"
+    printf 'git@github.com:%s/%s.git\n' "$_ru_owner" "$_ru_repo"
 }
 
 cmd_add() {
     # ut add <repo> <tags> <description>
-    _repo="${1:-}"; _tags="${2:-}"; _desc="${3:-}"
-    [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut add <repo> <tags> <description>"
+cmd_add() {
+    # ut add <repo> <tags> <description> [owner]
+    # owner defaults to $GITHUB_USER (own repo). For a shared/foreign repo,
+    # pass the GitHub owner explicitly so repo_url can resolve the clone URL.
+    _repo="${1:-}"; _tags="${2:-}"; _desc="${3:-}"; _owner="${4:-$GITHUB_USER}"
+    [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut add <repo> <tags> <description> [owner]"
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
-    printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
-    ok "added: $_repo [$_tags]"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$_owner" >> "$TSV"
+    ok "added: $_repo [$_tags] owner=$_owner"
 }
-
-cmd_untrack() {
     # ut untrack <repo> -- removes repo from repos.tsv ONLY.
     # Does NOT touch the local clone and does NOT touch GitHub.
     # If you want to nuke everything, see: ut delete (admin.sh).
@@ -165,7 +165,7 @@ cmd_info() {
     [ -z "$_repo" ] && die "usage: ut info <repo>"
     _row=$(grep "^$_repo	" "$TSV") || die "$_repo not found in repos.tsv"
     bold "── $_repo ──"
-    printf '%s\n' "$_row" | awk -F'\t' '{printf "tags:  %s\ndesc:  %s\nstate: %s\n", $2, $3, $4}'
+    printf '%s\n' "$_row" | awk -F'\t' '{printf "tags:  %s\ndesc:  %s\nstate: %s\nowner: %s\n", $2, $3, $4, $5}'
     _target="$DST/$_repo"
     if [ -e "$_target/.git" ]; then
         printf "remote: "; git -C "$_target" remote get-url origin

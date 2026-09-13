@@ -6,7 +6,7 @@
 # if tag given: only that tag
 #  repos_all -- print all repo names from TSV, no filtering
 repos_all() {
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state; do
+    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
         [ -z "$name" ] && continue
         printf '%s\n' "$name"
     done
@@ -14,7 +14,7 @@ repos_all() {
 
 #  repos_active -- print repo names where state == active
 repos_active() {
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state; do
+    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
         [ -z "$name" ] && continue
         [ "$state" = "active" ] && printf '%s\n' "$name"
     done
@@ -46,7 +46,7 @@ repos_for_target() {
     esac
     _tmp_matched=$(mktemp)
     printf '0' > "$_tmp_matched"
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state; do
+    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
         [ -z "$name" ] && continue
         case ",$tags," in
             *",$_target,"*)
@@ -118,13 +118,13 @@ cmd_list() {
     if [ -n "$_tag" ] && ! grep -q ",$_tag," <(tail -n +2 "$TSV" | cut -f2 | sed 's/^/,/;s/$/,/') \
        && grep -q "^${_tag}	" "$TSV"; then
         bold "repos [repo: $_tag]:"
-        tail -n +2 "$TSV" | while IFS='	' read -r name tags desc; do
+    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
             case "$name" in "$_tag") printf "  %-35s ${C}%-10s${Z} %s\n" "$name" "$tags" "$desc" ;; esac
         done
         return 0
     fi
     bold "repos${_tag:+ [tag: $_tag]}:"
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc; do
+    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
         [ -z "$name" ] && continue
         if [ -n "$_tag" ]; then
             case ",$tags," in *",$_tag,"*) printf "  %-35s ${C}%-10s${Z} %s\n" "$name" "$tags" "$desc" ;; esac
