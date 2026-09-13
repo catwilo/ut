@@ -80,7 +80,10 @@ cmd_status() {
         fi
         _others=$(git -C "$target" branch --format="%(refname:short)" 2>/dev/null | grep -v "^main$" || true)
         _drift=0
-        [ -s "$_cloud" ] && ! grep -qx "$repo" "$_cloud" && _drift=1
+        _owner=$(awk -F'\t' -v r="$repo" '$1==r {print $5; exit}' "$TSV")
+        [ "$_owner" = "$GITHUB_USER" ] || [ -z "$_owner" ] && {
+            [ -s "$_cloud" ] && ! grep -qx "$repo" "$_cloud" && _drift=1
+        }
         if [ "$_d" -eq 0 ] && [ "$_u" -eq 0 ] && [ "$_a" -eq 0 ] && [ "$_b" -eq 0 ] && [ "$_s" -eq 0 ] && [ "$_br" = "main" ] && [ -z "$_others" ] && [ "$_drift" -eq 0 ]; then
             ok "$repo  clean"
             info "  cmd: git log --oneline -5"
