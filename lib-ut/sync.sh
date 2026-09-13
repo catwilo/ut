@@ -35,8 +35,9 @@ cmd_sync() {
                 ok "$repo updated"
             fi
         else
-            info "cmd: git clone git@github.com:$GITHUB_USER/$repo.git \"$target\""
-            git clone "git@github.com:$GITHUB_USER/$repo.git" "$target" \
+            _url="$(repo_url "$repo")"
+            info "cmd: git clone $_url \"$target\""
+            git clone "$_url" "$target" \
                 && ok "$repo cloned" \
                 || { err "$repo — clone failed"; errors=$((errors+1)); }
         fi
@@ -126,8 +127,9 @@ cmd_clone() {
         target="$DST/$repo"
         if [ -e "$target/.git" ]; then
             info "$repo — already cloned, skipping"
-        else
-            info "cmd: git clone git@github.com:$GITHUB_USER/$repo.git \"$target\""
+            _url="$(repo_url "$repo")"
+            info "cmd: git clone $_url \"$target\""
+            git clone "$_url" "$target" \
             git clone "git@github.com:$GITHUB_USER/$repo.git" "$target" \
                 && ok "$repo cloned" \
                 || { err "$repo — clone failed"; errors=$((errors+1)); }
@@ -148,8 +150,9 @@ cmd_install() {
     fi
     gh auth status >/dev/null 2>&1 || die "gh not authenticated -- run: gh auth login"
     mkdir -p "$DST"
+    _url="$(repo_url "$_repo")"
     info "$_repo -- installing from cloud..."
-    git clone "git@github.com:$GITHUB_USER/$_repo.git" "$target" \
+    git clone "$_url" "$target" \
         && ok "$_repo installed to $target" \
         || die "$_repo -- clone failed"
     printf '\n'; cmd_list local

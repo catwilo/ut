@@ -43,7 +43,8 @@ cmd_new() {
     ok "registered: $_repo in repos.tsv"
     _tsv_publish "register $_repo"
     mkdir -p "$DST"
-    if ! git clone "git@github.com:$GITHUB_USER/$_repo.git" "$DST/$_repo"; then
+    _url="$(repo_url "$_repo")"
+    if ! git clone "$_url" "$DST/$_repo"; then
         err "$_repo  clone failed"
         return 1
     fi
@@ -70,7 +71,8 @@ cmd_new() {
         is_local_ip "$_ip" && continue
         _wait_reachable "$_ip" "${_port:-22}" || { warn "$_alias -- skipped (unreachable)"; continue; }
         info "syncing $_repo -> $_alias..."
-        nssh "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone git@github.com:$GITHUB_USER/$_repo.git ~/unix-toolkit-tools/$_repo" 2>/dev/null \
+        _url="$(repo_url "$_repo")"
+        nssh "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo" 2>/dev/null \
             && ok "$_alias -- $_repo cloned" || err "$_alias -- clone failed"
     done <<< "$(_all_nodes_aliases)"
     ok "$_repo distributed to all nodes"
@@ -123,7 +125,8 @@ PYEOF
 
     if [ -d "$DST/$_old" ]; then
         mv "$DST/$_old" "$DST/$_new" && ok "local clone moved: $DST/$_old -> $DST/$_new" || warn "mv failed — move manually"
-        git -C "$DST/$_new" remote set-url origin "git@github.com:$GITHUB_USER/$_new.git" && ok "remote URL updated" || warn "remote URL update failed"
+        _url="$(repo_url "$_new")"
+        git -C "$DST/$_new" remote set-url origin "$_url" && ok "remote URL updated" || warn "remote URL update failed"
     fi
 
     _tsv_publish "rename $_old -> $_new"
@@ -145,7 +148,8 @@ _rename_propagate() {
         is_local_ip "$_rp_ip" && continue
         _wait_reachable "$_rp_ip" "${_rp_port:-22}" || { warn "$_rp_alias — skipped (unreachable)"; continue; }
         info "propagating rename to $_rp_alias..."
-        nssh "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin git@github.com:$GITHUB_USER/$_rp_new.git" 2>/dev/null \
+        _url="$(repo_url "$_rp_new")"
+        nssh "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url" 2>/dev/null \
             && ok "$_rp_alias — renamed" || warn "$_rp_alias — rename propagation failed"
     done <<< "$(_all_nodes_aliases)"
 }

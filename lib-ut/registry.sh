@@ -49,12 +49,25 @@ print(f"ok: {repo} tags updated")
 PYEOF
 }
 
+# repo_url <repo> -- resolve the git clone URL for a repo name.
+# A name containing "/" is treated as "owner/repo" (external/shared repo).
+# A plain name is treated as a local repo owned by $GITHUB_USER.
+# Single source of truth for URL construction; callers must not
+# interpolate $GITHUB_USER themselves (ut#615).
+repo_url() {
+    _ru_repo="$1"
+    case "$_ru_repo" in
+        */*) printf 'git@github.com:%s.git\n' "$_ru_repo" ;;
+        *)   printf 'git@github.com:%s/%s.git\n' "$GITHUB_USER" "$_ru_repo" ;;
+    esac
+}
+
 cmd_add() {
     # ut add <repo> <tags> <description>
     _repo="${1:-}"; _tags="${2:-}"; _desc="${3:-}"
     [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut add <repo> <tags> <description>"
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
-    printf '%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" >> "$TSV"
+    printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
     ok "added: $_repo [$_tags]"
 }
 
