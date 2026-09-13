@@ -144,6 +144,16 @@ Observed behavioral violations and fixes:
 ## EXECUTION CONVENTIONS
 
 - Pair every state change with its verification in the same block.
+- **NEVER suppress stderr with pipes or redirections** -- `2>/dev/null`,
+  `2>&1 | grep`, `| head`, `| tail`, `| grep`, or any pipe that discards
+  the original error stream is FORBIDDEN. Errors must always be visible.
+  When you need to filter or transform stdout, do it without touching
+  stderr (e.g., `cmd 2>&1 | tee log` is allowed because it preserves
+  stderr; `cmd 2>/dev/null` is not). If a command produces noisy stderr
+  and you must isolate its real output, capture it to a temp file and
+  read the file, never silence the stream. This rule is critical: silent
+  failures (see ut#11, _tsv_publish) are the direct result of suppressed
+  stderr and cost hours of debugging.
 - On silent failure (no output), re-run capturing stderr explicitly
   before any other step.
 - After the same error five times, stop and propose a different
