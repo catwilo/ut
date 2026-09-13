@@ -1,219 +1,138 @@
-# ut — unix-toolkit-tools repo manager
+# ut
 
-Manages all repos in the catwilo ecosystem across Termux, Debian, and macOS.
-Source of truth: repos.tsv. Works with miko (task + ctx) and gh (GitHub CLI).
+Repo manager for the unix-toolkit-tools ecosystem (Termux, Debian, macOS).
 
----
+`ut` does ONE thing: manage git repositories registered in `repos.tsv`.
+It does NOT manage tasks (that is `miko`) and does NOT manage websites
+(that is `ksite`). Each tool owns its domain; they share only the repo
+name as a key.
+
+Source of truth for the repo registry: `repos.tsv`.
+Source of truth for git state: `git` itself. `ut` never duplicates it.
 
 ## Installation
 
-```sh
-git clone git@github.com:catwilo/ut.git ~/unix-toolkit-tools/ut
-export PATH="$HOME/unix-toolkit-tools/ut:$PATH"  # add to ~/.zshenv
-```
+    git clone git@github.com:catwilo/ut.git ~/unix-toolkit-tools/ut
+    sh ~/unix-toolkit-tools/ut/install.sh
 
-All repos clone into ~/unix-toolkit-tools/<name>/.
+`install.sh` symlinks `ut` into PATH, installs the git pre-commit hook
+template globally (`init.templateDir`), and populates the hook in every
+already-cloned repo. Idempotent.
 
----
+## Usage
 
-## Commands
+    ut <command> [args]
 
-### ut sync
-Fetch all remotes, show cross-repo status. Non-destructive.
-```sh
-ut sync
-```
+Run `ut` without args for the full command list with descriptions.
 
-### ut status
-Only repos with something to report. Flags per repo:
-dirty, ahead, behind, stash, branch (when not on main), and drift
-(cloned but absent from the GitHub catalog -- renamed or deleted).
-```sh
-ut status
-# ⚠ zsh-setup  dirty:2 ahead:1
-# [37 repos]  36 clean   1 with changes
-```
+### Read (all repos)
 
-### ut push
-Push all repos ahead of remote. Called internally by miko sync.
-```sh
-ut push
-```
-In daily workflow use miko sync — runs dstask + ut push in order.
+    ut list                    list all registered repos
+    ut list <tag>              filter by tag
+    ut list local              only cloned repos
+    ut list cloud              only repos that exist on GitHub
+    ut list orphans            local clones not in repos.tsv
+    ut status                  git state per repo (dirty/ahead/behind/branch)
+    ut status --remote         same + reachability check to each node
+    ut diff                    uncommitted changes across all repos
+    ut fetch                   fetch all remotes
 
-### ut clone
-Clone all registered repos not yet present locally, then echo the
-updated local inventory so no separate `ut list local` is needed.
-```sh
-ut clone           # all missing
-ut clone noemap    # one specific repo
-```
-Always uses SSH (git@github.com:catwilo/<repo>.git).
+### Git (all repos)
 
-### ut install
-Clone one registered repo that is not yet local, then echo the updated
-local inventory.
-```sh
-ut install <repo>
-```
+    ut sync [tag]              update ut itself, sync repos (scoped recommended)
+    ut push                    push repos ahead of their remote
+    ut run '<cmd>' [tag]       run a shell command in each repo
 
-### ut list
-List all repos with tags and description.
-```sh
-ut list
-ut list tool       # filter by tag
-```
+Note: `ut sync` without tag touches EVERY repo. In daily work prefer
+scoped sync via `miko sync -r <repo>` for tasks, and `ut ship <repo>`
+for code. Global sync is for explicit manual use.
 
-### ut tag
-Show or filter repos by tag.
-```sh
-ut tag             # all tags in use
-ut tag cfg         # repos tagged cfg
-```
+### Git (one repo)
 
-### ut add
-Register a new repo in repos.tsv. Does not create the GitHub repo.
-```sh
-ut add <repo> <tags> "<description>"
-ut add deadd-setup tool,cfg "deadd notification center config + scripts"
-```
+    ut clone [tag]             clone all (or tagged) registered repos
+    ut install <repo>          clone one registered repo not yet local
+    ut branch <repo> <branch>  pull+rebase, create branch (autostash)
+    ut ship <repo>             rebase+merge+push, delete branch
 
-### ut rm
-Remove a repo from repos.tsv. Does not delete the local clone.
-```sh
-ut rm correccionLatex
-```
+### Registry (edits repos.tsv)
 
-### ut run
-Run a command in every cloned repo.
-```sh
-ut run git log --oneline -1
-```
+    ut add <repo> <tags> '<desc>'    register a new repo
+    ut untrack <repo>                remove from repos.tsv only
+    ut unclone <repo>                move local clone to trash only
+    ut tag <repo> +<tag>|-<tag>      add/remove a tag
+    ut pause <repo>                  mark as paused
+    ut resume <repo>                 mark as active
+    ut archive <repo>                mark as archived
+    ut info <repo>                   show metadata + git state
 
-### ut health
-Per repo: unreachable remote, branch off main, ahead/behind, dirty
-tree, stash present, and drift against the GitHub catalog. Uses `gh`
-for the catalog snapshot; if `gh` is unavailable, drift is skipped.
-```sh
-ut health
-```
+### GitHub (destructive)
 
-### ut diff
-Show uncommitted changes across all repos.
-```sh
-ut diff
-ut diff zsh-setup
-```
+    ut new <repo> <tags> '<desc>'      create + clone + distribute to nodes
+    ut create <repo> <tags> '<desc>'   create on GitHub only (alias of new)
+    ut delete <repo>                   delete on GitHub + untrack + trash
+    ut rename <old> <new>              rename on GitHub + propagate to nodes
 
-### ut machines
-List registered devices via noemap — OS, repo count, sync state.
-```sh
-ut machines
-# ── d0 [debian] ── ✓ 31 repos synced
-# ── tx [android] ── ✓ 31 repos synced
-```
+### Nodes (multi-machine)
 
-### ut machines diff
-Compare git state of every repo across all nodes (local + remote) to spot divergence.
-Runs a POSIX collector on each node via `nssh --raw` and prints one row per repo.
+    ut machines                ping all nodes
+    ut machines diff           per-repo git state across nodes
+    ut distribute <repo>       copy repo to all reachable nodes
+    ut deploy <repo>           install.sh locally + distribute
+    ut deploy all              deploy every repo tagged 'core'
+    ut distribute --no-install <repo>   distribute without running install.sh
 
-    ut machines diff
-    # repo  local <hash>  db <hash>  tx <hash>[branch:][↑ahead][*dirty]
+## Standard fix flow
 
-Cell format: `[branch:]hash[↑N][*M]` — branch shown only when not main, `↑N` commits ahead, `*M` dirty files. Differing hashes across columns = divergence. Unreachable nodes marked `unreach`.
+    1. ut branch <repo> <type>/<name>
+    2. edit files
+    3. verify locally
+    4. ut ship <repo>              rebase+merge+push to main, delete branch
+    5. [optional] ut deploy <repo> run install.sh + distribute to nodes
+    6. miko sync -r <repo>         reconcile task state (scoped)
 
----
+Steps 5 and 6 are asked explicitly; never run them autonomously.
 
 ## repos.tsv
 
-Tab-separated: name / tags / description. Managed by ut add / ut rm.
-
-```
-clipso    tool,cli    copy anything to clipboard across environments
-noemap    tool,net    LAN discovery and SSH device mapper
-zsh-setup cfg         dotfiles + zsh installer for all platforms
-```
-
----
+Tab-separated: `name / tags / description / state`. Edit via
+`ut add`, `ut tag`, `ut untrack`, `ut pause|resume|archive`. Never
+hand-edit unless recovering from an error.
 
 ## Tag vocabulary
 
-| Tag    | Meaning                        |
-|--------|--------------------------------|
-| tool   | CLI tool, daily use            |
-| cli    | command-line interface         |
-| cfg    | dotfiles / configuration       |
-| util   | small utility, no installer    |
-| infra  | infrastructure / provisioning  |
-| net    | networking                     |
-| sec    | security / audit               |
-| svc    | background service             |
-| core   | foundational dependency        |
-| client | client project (external)      |
-| web    | web frontend                   |
-| arc    | archived / reference only      |
-| game   | game or emulation project      |
-| fw     | firmware / kernel driver       |
-| bot    | automation bot                 |
-
----
+    tool    CLI tool, daily use
+    cli     command-line interface
+    cfg     dotfiles / configuration
+    util    small utility, no installer
+    infra   infrastructure / provisioning
+    net     networking
+    sec     security / audit
+    svc     background service
+    core    foundational dependency
+    client  client project (external)
+    web     web frontend
+    app     application (gui, mobile)
+    audio   audio synthesis / processing
+    docs    documentation
+    arc     archived / reference only
+    game    game or emulation
+    fw      firmware / kernel driver
+    bot     automation bot
+    project multi-purpose project
+    personal personal projects
 
 ## Integration
 
-- miko owns task state (ctx files removed; auto-generation was dropped,
-  see ut#472). Use miko sync for full sync.
-- gh required for GitHub operations (repo create, etc).
-- noemap provides device aliases used by ut machines.
-- ut's task system (miko buckets, ~/.tasks/<repo>) is NOT the same thing
-  as a code repository registered here (repos.tsv). A miko project can
-  exist without a registered repo. The normal path is the other
-  direction: a repo registered in ut needs a miko project (bucket) to
-  have tasks -- this is done via 'miko add <repo> ...' on first use,
-  and is effectively automatic from then on.
-- Manual git checks (fetch/diff/branch/status per repo) are already
-  automated -- use 'ut status' or 'ut status --remote' instead of
-  running the individual git commands by hand.
+- `miko` owns tasks. `ut` does not know about tasks.
+- `ksite` owns websites. `ut` does not know about Netlify/Cloudflare.
+- `nina` provides node aliases. `ut machines` uses them via nssh.
+- `gh` is required for GitHub operations (create, delete, rename).
 
----
+## Documentation
 
-### ut create
-Register and create a new GitHub repo, add to repos.tsv, clone locally.
-```sh
-ut create <repo> <tags> "<description>"
-```
-
-### ut delete
-Delete GitHub repo, remove from repos.tsv, move local clone to trash.
-```sh
-ut delete <repo>
-```
-
-### ut rename
-Rename GitHub repo, update repos.tsv, move local clone directory.
-```sh
-ut rename <old> <new>
-```
-
-### ut info
-Show repo metadata, remote URL, branch, ahead/dirty status, recent commits.
-```sh
-ut info <repo>
-```
-
-### ut ship
-After verifico: rebase branch onto origin/main, merge, push, delete branch.
-```sh
-ut ship <repo>
-```
-Human executes after confirming fix works. Never call autonomously.
-
-### ut distribute
-Pull and reinstall a repo on every reachable node via noemap.
-```sh
-ut distribute <repo>
-```
-Skips nodes where repo is not cloned. Reports unreachable nodes.
-
----
-
-→ [Project portfolio](PORTFOLIO.md)
+- `ARCHITECTURE.md` -- module layout, flow, invariants.
+- `DECISIONS.md` -- why things are the way they are (ADR-lite).
+- `ai.md` -- LLM session spec (not for humans; ignore unless extending
+  the AI contract).
+- `PORTFOLIO.md` -- project index by tag.
+- `err.md` -- known failure modes and recovery.
