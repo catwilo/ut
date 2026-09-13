@@ -44,6 +44,7 @@ print_help() {
   printf "  ut list cloud                -- lista todo lo que existe en GitHub\n"
   printf "  ut list local                -- lista lo clonado en este dispositivo\n"
   printf "  ut list orphans              -- clones locales no registrados en repos.tsv\n"
+  printf "  ut list shared               -- lista repos de GitHub compartidos con el usuario (colaborador)\n"
   printf "  ut status                    -- git status + salud + branches no mergeadas en cada repo\n"
   printf "  ut status --remote           -- igual, mas chequeo de conectividad al remoto\n"
   printf "  ut diff                      -- git diff en cada repo clonado\n"

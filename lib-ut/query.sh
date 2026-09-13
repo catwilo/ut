@@ -105,6 +105,15 @@ cmd_list() {
             rm -f "$_tmp_tsv"
             return 0
             ;;
+        shared)
+            gh auth status >/dev/null 2>&1 || die "gh not authenticated -- run: gh auth login"
+            info "cmd: gh api \"/user/repos?affiliation=collaborator\" --paginate --jq '.[].full_name' | sort"
+            bold "repos compartidos con $GITHUB_USER (colaborador):"
+            gh api "/user/repos?affiliation=collaborator" --paginate --jq '.[].full_name' | sort | while IFS= read -r _r; do
+                printf "  %s\n" "$_r"
+            done
+            return 0
+            ;;
     esac
     if [ -n "$_tag" ] && ! grep -q ",$_tag," <(tail -n +2 "$TSV" | cut -f2 | sed 's/^/,/;s/$/,/') \
        && grep -q "^${_tag}	" "$TSV"; then
