@@ -51,3 +51,4 @@ orcdroid	tool core	Android remoto en Oracle Cloud via Waydroid y Sunshine	active
 termux-node	util,core	Termux no-root bootstrap: base packages + runit services (sshd) + tools	active	catwilo
 ksite	tool,web,core	gestor de sitios web local y desplegado -- provider-agnostico	active	catwilo
 arepa-pos	client,web	repo compartido por Kbaulo -- a investigar y poblar tareas iniciales en miko	active	Kbaulo
+lau-chan	tool	entorno Debian (proot+i3+X11) sobre Android	active
