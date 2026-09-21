@@ -53,3 +53,4 @@ ksite	tool,web,core	gestor de sitios web local y desplegado -- provider-agnostic
 arepa-pos	client,web	repo compartido por Kbaulo -- a investigar y poblar tareas iniciales en miko	active	Kbaulo
 lau-chan	tool	entorno Debian (proot+i3+X11) sobre Android	active
 sustentacion-bom	core,infra,rpx-report	Documento de sustentación de la iniciativa BaquiaRaudal: Villanueva Digital	active
+aula-lego	docs,project	Documentación en texto plano de talleres y cursos de robótica educativa con LEGO	active
