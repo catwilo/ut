@@ -54,3 +54,4 @@ arepa-pos	client,web	repo compartido por Kbaulo -- a investigar y poblar tareas 
 lau-chan	tool	entorno Debian (proot+i3+X11) sobre Android	active
 sustentacion-bom	core,infra,rpx-report	Documento de sustentación de la iniciativa BaquiaRaudal: Villanueva Digital	active
 aula-lego	docs,project	Documentación en texto plano de talleres y cursos de robótica educativa con LEGO	active
+biblio-web	client,web	sitio web estatico biblioteca municipal - clon arquitectonico de VocesDelCampo (React+Vite+ksite)	active
