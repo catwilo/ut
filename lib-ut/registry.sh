@@ -61,8 +61,6 @@ repo_url() {
 }
 
 cmd_add() {
-    # ut add <repo> <tags> <description>
-cmd_add() {
     # ut add <repo> <tags> <description> [owner]
     # owner defaults to $GITHUB_USER (own repo). For a shared/foreign repo,
     # pass the GitHub owner explicitly so repo_url can resolve the clone URL.
@@ -72,6 +70,7 @@ cmd_add() {
     printf '%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$_owner" >> "$TSV"
     ok "added: $_repo [$_tags] owner=$_owner"
 }
+cmd_untrack() {
     # ut untrack <repo> -- removes repo from repos.tsv ONLY.
     # Does NOT touch the local clone and does NOT touch GitHub.
     # If you want to nuke everything, see: ut delete (admin.sh).
