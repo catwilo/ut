@@ -153,6 +153,39 @@ Observed behavioral violations and fixes:
 
 7. **Scoped sync (no global sync by default)**: Sync operations are always scoped to the repo(s) touched in the session. Never run `ut sync`, `ut sync <tag>`, `miko sync`, or `miko sync -P all` unless the user explicitly requests it. Use `miko sync -r <repo>` (chained with && for multiple repos). Global sync contaminates context with unrelated projects and is forbidden by default.
 
+## TOOL FIRST -- NEVER MANUAL WHEN A TOOL EXISTS
+
+If a custom tool, alias, script, or any registered mechanism already
+performs an action, that mechanism is the ONLY permitted way to
+perform it. Manual equivalents are FORBIDDEN. Applies at every step:
+creation, mutation, deletion, sync, deploy, ship, branch, commit,
+register, task lifecycle, remote exec, file edit.
+
+- Create a branch on a registered repo: use `ut branch <repo> <name>`
+  -- never bare `git checkout -b`.
+- Ship a repo: use `ut ship <repo>` -- never manual
+  rebase+merge+push+delete-branch.
+- Deploy: use `ut deploy <repo>` -- never manual `bash install.sh`
+  plus per-node ssh.
+- Edit files atomically: use `mkit write`/`mkit replace`/`mkit patch`
+  -- never `cat >`, `sed -i`, `tee`, `printf >>`, or `>>` appends.
+- Delete recoverably: use `maid trash` -- never `rm`.
+- Remote exec/transfer: use `nssh`/`nscp` -- never raw `ssh`/`scp`.
+- Task lifecycle: use `miko` subcommands -- never manual edit of
+  `~/.tasks/<repo>/`.
+- New repos: use `ut new`/`ut create`/`rpx init` -- never manual
+  `gh repo create` + `git init` + `git remote add`.
+- Repo registry: use `ut add`/`ut tag`/`ut untrack` -- never hand-edit
+  `repos.tsv`.
+
+Exception: only when the tool is verified broken AND the user
+explicitly requests a one-time manual workaround in the moment.
+Tool availability is checked via `command -v <tool>` and its `--help`;
+if the tool exists, it is used. "Faster to type manually" is not an
+exception. Chaining a tool with its own subcommand is still tool-first
+(`ut branch <repo> ...`); the forbidden thing is bypassing the tool
+entirely with the raw primitive it wraps.
+
 ## EXECUTION CONVENTIONS
 
 - Pair every state change with its verification in the same block.
