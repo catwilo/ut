@@ -57,3 +57,4 @@ aula-lego	docs,project	Documentación en texto plano de talleres y cursos de rob
 biblio-web	client,web	sitio web estatico biblioteca municipal - clon arquitectonico de VocesDelCampo (React+Vite+ksite)	active
 cv-personal	personal,docs,rpx-report	hoja de vida personal -- CV en formato rpx-report	active
 iglesia-auto	client,automation	Automatizacion y herramientas digitales para la Iglesia Panamericana	active
+redmi-15c-firmware	android,firmware	Redmi 15C firmware research, labs, findings and reports	active
