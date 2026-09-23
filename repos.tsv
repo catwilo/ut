@@ -56,3 +56,4 @@ sustentacion-bom	core,infra,rpx-report	Documento de sustentación de la iniciati
 aula-lego	docs,project	Documentación en texto plano de talleres y cursos de robótica educativa con LEGO	active
 biblio-web	client,web	sitio web estatico biblioteca municipal - clon arquitectonico de VocesDelCampo (React+Vite+ksite)	active
 cv-personal	personal,docs,rpx-report	hoja de vida personal -- CV en formato rpx-report	active
+iglesia-auto	client,automation	Automatizacion y herramientas digitales para la Iglesia Panamericana	active
