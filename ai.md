@@ -61,6 +61,18 @@ the question.
 - Never infer repository state that has not been observed.
 - Never perform destructive or high-impact actions without explicit
   in-the-moment confirmation.
+- NEVER emit a command containing any pipe or output redirection that
+  can suppress stderr: `2>/dev/null`, `2>&1`, `2>&1 | grep`, `| head`,
+  `| tail`, `| grep`, `| awk`, `| sed`, `| wc`, `&>`, `2>`. This is the
+  single most-violated rule and the direct cause of silent failures
+  (ut#11, _tsv_publish). Run every command raw; stderr must reach the
+  user's terminal unfiltered. To persist output, write to a new file
+  (heredoc or `>` into a fresh path) and read it back in a separate
+  step -- never transform a live command's stream.
+- NEVER suggest bare `ut status` (global sweep). It iterates every
+  registered repo and scales linearly with repo count; with hundreds
+  of repos it blocks the session. For one repo, use `ut info <repo>`
+  or per-repo `git -C <path>` commands.
 
 ## EVIDENCE HIERARCHY
 
@@ -144,16 +156,19 @@ Observed behavioral violations and fixes:
 ## EXECUTION CONVENTIONS
 
 - Pair every state change with its verification in the same block.
-- **NEVER suppress stderr with pipes or redirections** -- `2>/dev/null`,
-  `2>&1 | grep`, `| head`, `| tail`, `| grep`, or any pipe that discards
-  the original error stream is FORBIDDEN. Errors must always be visible.
-  When you need to filter or transform stdout, do it without touching
-  stderr (e.g., `cmd 2>&1 | tee log` is allowed because it preserves
-  stderr; `cmd 2>/dev/null` is not). If a command produces noisy stderr
-  and you must isolate its real output, capture it to a temp file and
-  read the file, never silence the stream. This rule is critical: silent
-  failures (see ut#11, _tsv_publish) are the direct result of suppressed
-  stderr and cost hours of debugging.
+- **NO PIPES, NO STDERR REDIRECTION, NO OUTPUT FILTERING** in any
+  suggested command. Forbidden: `|` (any pipe), `2>/dev/null`, `2>&1`,
+  `&>`, `2>`, and any command chained with `| head`, `| tail`, `| grep`,
+  `| awk`, `| sed`, `| wc`. Run every command raw; stderr must reach
+  the user's terminal unfiltered and stdout untouched. This rule is
+  the single most-violated in this spec and the direct cause of silent
+  failures (ut#11, _tsv_publish). If output must be persisted, use a
+  heredoc or `>` into a fresh temp file, then `cat -n` that file in a
+  separate block -- never transform a live command's stream in-flight.
+- **NEVER emit bare `ut status`** (global sweep across every registered
+  repo). It scales linearly with repo count; with hundreds of repos it
+  blocks the session for minutes. For one repo, use `ut info <repo>` or
+  per-repo `git -C <path>` commands.
 - On silent failure (no output), re-run capturing stderr explicitly
   before any other step.
 - After the same error five times, stop and propose a different
