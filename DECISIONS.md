@@ -110,7 +110,7 @@ git state (ut) and task state (miko). The coupling caused staleness.
 shared key is the repo name. `ut` never reads or writes a miko bucket.
 
 **Consequence.** `ut sync` no longer touches tasks. Task reconciliation
-is `miko sync -r <repo>` (scoped) or `miko sync` (explicit global).
+is `miko sync <repo>` (scoped) or `miko sync` (explicit global).
 Each tool can evolve without breaking the other.
 
 ---

@@ -49,7 +49,7 @@ two systems are independent and share only the name.
 3. Verify (local check, visual if UI).
 4. `ut ship <repo>` -- rebase+merge+push to main, delete branch.
 5. `ut deploy <repo>` -- run install.sh locally, distribute to nodes.
-6. `miko sync -r <repo>` -- reconcile task state, scoped.
+6. `miko sync <repo>` -- reconcile task state, scoped.
 
 ## Invariants
 

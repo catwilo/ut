@@ -44,7 +44,7 @@ Run `ut` without args for the full command list with descriptions.
     ut run '<cmd>' [tag]       run a shell command in each repo
 
 Note: `ut sync` without tag touches EVERY repo. In daily work prefer
-scoped sync via `miko sync -r <repo>` for tasks, and `ut ship <repo>`
+scoped sync via `miko sync <repo>` for tasks, and `ut ship <repo>`
 for code. Global sync is for explicit manual use.
 
 ### Git (one repo)
@@ -88,7 +88,7 @@ for code. Global sync is for explicit manual use.
     3. verify locally
     4. ut ship <repo>              rebase+merge+push to main, delete branch
     5. [optional] ut deploy <repo> run install.sh + distribute to nodes
-    6. miko sync -r <repo>         reconcile task state (scoped)
+    6. miko sync <repo>         reconcile task state (scoped)
 
 Steps 5 and 6 are asked explicitly; never run them autonomously.
 
