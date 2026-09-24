@@ -210,11 +210,24 @@ cmd_deploy_one() {
         info "running install.sh on local..."
         bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
         ok "local install complete"
-        log_change "$_repo" "deploy"
     else
         warn "no install.sh for $_repo, skipping local install"
     fi
-    cmd_distribute "$_repo"
+    cmd_distribute "$_repo" || return 1
+    _rbase="unix-toolkit-tools/$_repo"
+    _devices="$(_nodes_db)"
+    while IFS= read -r alias; do
+        [ -z "$alias" ] && continue
+        _dblk="$(blockdb_get "$_devices" alias "$alias")"
+        [ -n "$_dblk" ] || continue
+        ip="$(blockdb_field "$_dblk" ip)"
+        port="$(blockdb_field "$_dblk" port)"
+        is_local_ip "$ip" && continue
+        _wait_reachable "$ip" "${port:-22}" || { warn "$alias — skipped (unreachable)"; continue; }
+        nssh "$alias" "bash ~/$_rbase/install.sh" || { warn "$alias — remote install.sh failed"; continue; }
+        ok "$alias — installed"
+    done <<< "$(_all_nodes_aliases)"
+    log_change "$_repo" "deploy"
 }
 
 _local_repo_names() {
@@ -287,8 +300,7 @@ cmd_distribute() {
             fi
         fi
         _local_head="$(git -C "$DST/$_repo" rev-parse HEAD 2>/dev/null || printf '')"
-        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main && { [ ! -f ~/$_rbase/install.sh ] || bash ~/$_rbase/install.sh; }" \
-            || { err "$alias — distribution failed"; continue; }
+        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" || { err "$alias — distribution failed"; continue; }
         _remote_head="$(nssh "$alias" "git -C ~/$_rbase rev-parse HEAD" 2>/dev/null || printf '')"
         if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
             err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
@@ -300,66 +312,3 @@ cmd_distribute() {
     ok "distribute complete"
 }
 
-cmd_distribute_only_one() {
-    _repo="$1"
-    _rbase="unix-toolkit-tools/$_repo"
-    _devices="$(_nodes_db)"
-    [ -f "$_devices" ] || die "device table not found: $_devices"
-    while IFS= read -r alias; do
-        [ -z "$alias" ] && continue
-        _doBlk="$(blockdb_get "$_devices" alias "$alias")"
-        [ -n "$_doBlk" ] || continue
-        ip="$(blockdb_field "$_doBlk" ip)"
-        user="$(blockdb_field "$_doBlk" user)"
-        port="$(blockdb_field "$_doBlk" port)"
-        is_local_ip "$ip" && continue
-        _port="${port:-22}"
-        if ! _wait_reachable "$ip" "$_port"; then
-            warn "$alias — skipped (unreachable: $ip:$_port)"
-            continue
-        fi
-        info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
-        if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
-            # Refresh the remote ut first: its repos.tsv must carry this
-            # repo before `ut install` can resolve it.
-            nssh "$alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
-            info "cmd: nssh \"$alias\" \"ut install $_repo\""
-            info "$alias — $_repo not cloned, installing..."
-            if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
-                warn "$alias — $_repo auto-install failed, skipping"
-                continue
-            fi
-        fi
-        _local_head="$(git -C "$DST/$_repo" rev-parse HEAD 2>/dev/null || printf '')"
-        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" \
-            || { err "$alias — distribution failed"; continue; }
-        _remote_head="$(nssh "$alias" "git -C ~/$_rbase rev-parse HEAD" 2>/dev/null || printf '')"
-        if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
-            err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
-            continue
-        fi
-        ok "$alias — $_repo updated (not installed, HEAD $_remote_head)"
-        log_change "$_repo" "distribute:$alias"
-    done <<< "$(_all_nodes_aliases)"
-    ok "distribute complete (no install)"
-}
-
-cmd_distribute_no_install() {
-    _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute --no-install <repo|all>"
-    if [ "$_repo" != "all" ]; then
-        cmd_distribute_only_one "$_repo"
-        return 0
-    fi
-    _skipped=$(mktemp); : > "$_skipped"
-    _ok=$(mktemp); : > "$_ok"
-    _local_repo_names | while IFS= read -r _r; do
-        [ -z "$_r" ] && continue
-        _target="$DST/$_r"
-        _reason=$(_repo_is_dirty "$_target") && { warn "$_r  skipped: $_reason"; printf '%s\n' "$_r" >> "$_skipped"; continue; }
-        cmd_distribute_only_one "$_r" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
-    done
-    _nok=$(wc -l < "$_ok" | tr -d ' '); _nskip=$(wc -l < "$_skipped" | tr -d ' ')
-    rm -f "$_ok" "$_skipped"
-    bold "distribute (no install) all: $_nok distributed, $_nskip skipped"
-}
