@@ -59,3 +59,4 @@ cv-personal	personal,docs,rpx-report	hoja de vida personal -- CV en formato rpx-
 iglesia-auto	client,automation	Automatizacion y herramientas digitales para la Iglesia Panamericana	active
 redmi-15c-firmware	android,firmware	Redmi 15C firmware research, labs, findings and reports	active
 redmi15c-setup	tool	Idempotent, verifiable, reversible Android setup tool for Redmi 15C: package pruning, background restrictions, launcher pinning	active
+biwa	tool,cli	Bitwarden CLI wrapper: fast password and TOTP retrieval to Android clipboard	active
