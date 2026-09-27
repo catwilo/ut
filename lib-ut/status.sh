@@ -20,6 +20,12 @@ repo_state() {
 }
 
 cmd_status() {
+    # --remote is accepted as a no-op: the remote fetch/connectivity check
+    # already runs unconditionally below. Kept for compatibility with the
+    # flag documented in older help text and any script that passes it.
+    case "${1:-}" in
+        --remote) shift ;;
+    esac
     info "cmd: git -C \"$(dirname "$TSV")\" pull --rebase origin main"
     if [ -d "$(dirname "$TSV")/.git" ]; then
         git -C "$(dirname "$TSV")" pull --rebase origin main >/dev/null 2>&1 || true

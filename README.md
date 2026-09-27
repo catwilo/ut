@@ -33,7 +33,7 @@ Run `ut` without args for the full command list with descriptions.
     ut list cloud              only repos that exist on GitHub
     ut list orphans            local clones not in repos.tsv
     ut status                  git state per repo (dirty/ahead/behind/branch)
-    ut status --remote         same + reachability check to each node
+    ut status                  same + reachability check to each node
     ut diff                    uncommitted changes across all repos
     ut fetch                   fetch all remotes
 
