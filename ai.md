@@ -163,12 +163,10 @@ register, task lifecycle, remote exec, file edit.
 
 - Create a branch on a registered repo: use `ut branch <repo> <name>`
   -- never bare `git checkout -b`.
-- Ship a repo: use `ut ship <repo>` -- never manual
-  rebase+merge+push+delete-branch.
-- Deploy: use `ut deploy <repo>` -- never manual `bash install.sh`
-  plus per-node ssh.
-- Edit files atomically: use `mkit write`/`mkit replace`/`mkit patch`
-  -- never `cat >`, `sed -i`, `tee`, `printf >>`, or `>>` appends.
+- Ship a repo: use `ut ship <repo>` -- never manual rebase+merge+push+delete-branch.
+- Publish a repo: use `ut ship <repo>` -- never `git push origin` on a feature branch, never open a pull request on GitHub, never click "Create a pull request" in the web UI. UT owns the full publish path: fetch, rebase, merge to main, push main, delete the feature branch. The hook template enforces it by blocking direct commits on main. PRs exist only for repos not registered in `repos.tsv`, which by definition cannot go through UT; every registered repo publishes through `ut ship`, full stop. If a branch was already pushed manually before this rule was understood, recover by shipping it through `ut ship <repo>` anyway: UT rebases the branch, merges to main locally, pushes main, deletes the local branch -- the stranded remote feature branch is cleaned up with `git push origin --delete <branch>` as the final step, never as a first step.
+- Deploy: use `ut deploy <repo>` -- never manual `bash install.sh` plus per-node ssh.
+- Edit files atomically: use `mkit write`/`mkit replace`/`mkit patch` -- never `cat >`, `sed -i`, `tee`, `printf >>`, or `>>` appends.
 - Delete recoverably: use `maid trash` -- never `rm`.
 - Remote exec/transfer: use `nssh`/`nscp` -- never raw `ssh`/`scp`.
 - Task lifecycle: use `miko` subcommands -- never manual edit of
