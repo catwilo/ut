@@ -159,7 +159,7 @@ cloud_snapshot() {
         2>/dev/null | sort -u > "$1"
 }
 
-# ── repo cleanliness check (used by deploy/distribute-only all) ────────────
+# ── repo cleanliness check (used by distribute all) ───────────────────────
 #  _repo_is_dirty <target> -- prints reason if dirty/unmerged, empty if clean
 _repo_is_dirty() {
     _t="$1"

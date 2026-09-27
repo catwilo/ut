@@ -82,12 +82,10 @@ print_help() {
   printf "  ut machines                  -- ping a todos los nodos registrados\n"
   printf "  ut machines diff             -- compara el estado de repos entre nodos\n"
   printf "  ut distribute <repo>         -- copia el repo a los nodos remotos\n"
-  printf "  ut deploy <repo>             -- corre install.sh local + distribute\n"
-  printf "                                  (si el repo no tiene install.sh, usa\n"
-  printf "                                   solo 'ut ship'; 'ut info <repo>' lo dice)\n"
-  printf "  ut deploy all                -- igual, pero solo en repos con tag 'core'\n"
-  printf "                                  (los demas: 'ut deploy <repo>' manual)\n"
-  printf "\nFLUJO ESTANDAR de un fix\n"
+  printf "  ut distribute <repo>         -- pull a los nodos remotos\n"
+  printf "  ut distribute --install <repo>  -- pull + install.sh local y remoto\n"
+  printf "                                  (si el repo no tiene install.sh,\n"
+  printf "                                   solo hace pull; 'ut info <repo>' lo dice)\n"
   printf "  1. ut branch <repo> fix/nombre  -- pull+rebase + crea la rama\n"
   printf "                                     (autostash automatico: si hay\n"
   printf "                                     cambios sin commit, los guarda\n"
@@ -95,9 +93,9 @@ print_help() {
   printf "  2. editar los archivos\n"
   printf "  3. verificar el cambio          (confirmas que esta bien)\n"
   printf "  4. ut ship <repo>               -- rebase+merge+push a main, borra la rama\n"
-  printf "  5. [PREGUNTA] deployar ahora? [y/N]\n"
-  printf "     y -> ut deploy <repo>        (omitir si el repo no tiene install.sh)\n"
-  printf "     N -> continuar sin deploy\n"
+  printf "  5. [PREGUNTA] instalar y distribuir ahora? [y/N]\n"
+  printf "     y -> ut distribute --install <repo>  (omitir si el repo no tiene install.sh)\n"
+  printf "     N -> continuar sin instalar\n"
   printf "  6. [PREGUNTA] sincronizar tareas de miko ahora? [y/N]\n"
   printf "     y -> miko sync\n"
   printf "     N -> continuar sin sync\n\n"
@@ -133,6 +131,5 @@ case "$CMD" in
     ship)       cmd_ship       "$@" ;;
     branch)     cmd_branch     "$@" ;;
     distribute) cmd_distribute "$@" ;;
-    deploy)     cmd_deploy     "$@" ;;
     *) err "unknown command: $CMD"; print_help; exit 1 ;;
 esac

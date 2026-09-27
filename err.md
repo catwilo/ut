@@ -15,4 +15,4 @@
 - Prohibido calcular rango de linea (from/to) para mkit replace sin verificar antes con sed/awk el numero exacto de linea de cierre del bloque.
 - Prohibido asumir que un commit cayo en la rama correcta sin correr git branch -v o git log --oneline -3 despues para confirmarlo.
 - Prohibido dar por terminado un flujo multi-paso (resolve, sync, ship) sin verificar que el ultimo paso (commit, push, merge) se ejecuto realmente.
-- Prohibido dejar un paso final (commit antes de merge, push antes de deploy) implicito sin comando explicito que lo confirme.
+- Prohibido dejar un paso final (commit antes de merge, push antes de distribute) implicito sin comando explicito que lo confirme.

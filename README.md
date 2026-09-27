@@ -76,10 +76,10 @@ for code. Global sync is for explicit manual use.
 
     ut machines                ping all nodes
     ut machines diff           per-repo git state across nodes
-    ut distribute <repo>       copy repo to all reachable nodes
-    ut deploy <repo>           install.sh locally + distribute
-    ut deploy all              deploy every repo tagged 'core'
-    ut distribute --no-install <repo>   distribute without running install.sh
+    ut distribute <repo>       pull repo on all reachable nodes
+    ut distribute --install <repo>  pull + run install.sh local and remote
+    ut distribute all          pull every repo tagged 'core'
+    ut distribute --install all     pull + install every core repo
 
 ## Standard fix flow
 
@@ -87,7 +87,7 @@ for code. Global sync is for explicit manual use.
     2. edit files
     3. verify locally
     4. ut ship <repo>              rebase+merge+push to main, delete branch
-    5. [optional] ut deploy <repo> run install.sh + distribute to nodes
+    5. [optional] ut distribute --install <repo>   pull + install on nodes
     6. miko sync <repo>         reconcile task state (scoped)
 
 Steps 5 and 6 are asked explicitly; never run them autonomously.

@@ -26,13 +26,13 @@ two systems are independent and share only the name.
 
 | File | Responsibility |
 |---|---|
-| `changelog.sh` | `log_change()`. Appends deploy/distribute events. |
+| `changelog.sh` | `log_change()`. Appends distribute/install events. |
 | `query.sh` | Repo listing/filtering by tag or name. `repos_for_target()`. |
 | `status.sh` | `cmd_status()`. Git state: fetch, snapshots local+remote, diff. |
 | `sync.sh` | `cmd_sync()`. Pulls all repos, self-updates ut. |
 | `registry.sh` | `cmd_add/untrack/unclone/tag/pause/resume/archive/info`. Edits repos.tsv. |
 | `admin.sh` | `cmd_new/create/delete/rename`. Destructive GitHub operations. Also `_tsv_publish()`. |
-| `nodes.sh` | `cmd_machines/distribute/deploy`. Multi-node via nina/nssh. |
+| `nodes.sh` | `cmd_machines/distribute`. Multi-node via nina/nssh. |
 | `identity.sh` | `is_local_ip()`. Node identity helpers. |
 
 ## Entrypoint flow
@@ -48,7 +48,7 @@ two systems are independent and share only the name.
 2. Edit files.
 3. Verify (local check, visual if UI).
 4. `ut ship <repo>` -- rebase+merge+push to main, delete branch.
-5. `ut deploy <repo>` -- run install.sh locally, distribute to nodes.
+5. `ut distribute [--install] <repo>` -- pull to all nodes; --install runs install.sh local + remote.
 6. `miko sync <repo>` -- reconcile task state, scoped.
 
 ## Invariants
@@ -93,7 +93,7 @@ Snapshots live in `$TMPDIR/ut-status/<repo>/`, cleaned after report.
 3. If `--no-install` is NOT set and `install.sh` exists in the repo,
    run it locally first, then on each remote.
 
-`ut deploy <repo>` = local `install.sh` + `ut distribute <repo>`.
+`ut distribute --install <repo>` = local `install.sh` + `ut distribute <repo>` + remote `install.sh`.
 
 ## Hook population
 

@@ -158,14 +158,14 @@ Observed behavioral violations and fixes:
 If a custom tool, alias, script, or any registered mechanism already
 performs an action, that mechanism is the ONLY permitted way to
 perform it. Manual equivalents are FORBIDDEN. Applies at every step:
-creation, mutation, deletion, sync, deploy, ship, branch, commit,
+creation, mutation, deletion, sync, ship, branch, commit,
 register, task lifecycle, remote exec, file edit.
 
 - Create a branch on a registered repo: use `ut branch <repo> <name>`
   -- never bare `git checkout -b`.
 - Ship a repo: use `ut ship <repo>` -- never manual rebase+merge+push+delete-branch.
 - Publish a repo: use `ut ship <repo>` -- never `git push origin` on a feature branch, never open a pull request on GitHub, never click "Create a pull request" in the web UI. UT owns the full publish path: fetch, rebase, merge to main, push main, delete the feature branch. The hook template enforces it by blocking direct commits on main. PRs exist only for repos not registered in `repos.tsv`, which by definition cannot go through UT; every registered repo publishes through `ut ship`, full stop. If a branch was already pushed manually before this rule was understood, recover by shipping it through `ut ship <repo>` anyway: UT rebases the branch, merges to main locally, pushes main, deletes the local branch -- the stranded remote feature branch is cleaned up with `git push origin --delete <branch>` as the final step, never as a first step.
-- Deploy: use `ut deploy <repo>` -- never manual `bash install.sh` plus per-node ssh.
+- Install: use `ut distribute --install <repo>` -- never manual `bash install.sh` plus per-node ssh.
 - Edit files atomically: use `mkit write`/`mkit replace`/`mkit patch` -- never `cat >`, `sed -i`, `tee`, `printf >>`, or `>>` appends.
 - Delete recoverably: use `maid trash` -- never `rm`.
 - Remote exec/transfer: use `nssh`/`nscp` -- never raw `ssh`/`scp`.
@@ -208,9 +208,9 @@ entirely with the raw primitive it wraps.
 - Mask secrets (tokens, keys, sensitive IPs) before they appear in any
   suggested output.
 - Before any smoke-test or verification run, confirm which binary is
-  actually active in PATH (`command -v`/`readlink -f`) and deploy first if
+  actually active in PATH (`command -v`/`readlink -f`) and install first if
   it doesn't match the source under test. Never assume the installed
-  binary reflects an uncommitted or undeployed change.
+  binary reflects an uncommitted or uninstalled change.
 - Whenever a task branches into analysis, investigation, or file reading
   (multiple `cat`/`find`/`grep`/status checks), group all such reads into
   the minimum number of command blocks, executing as many as possible
@@ -232,9 +232,9 @@ Confirm a file exists before suggesting any operation on it.
 ## BATCH EDITING
 
 All edits to one file: one branch, each verified individually, one
-ship + deploy + sync cycle at the end. Cycle cost is fixed (~85s); N
+ship + distribute + sync cycle at the end. Cycle cost is fixed (~85s); N
 edits cost 1 cycle. Post-edit tests run against the source binary under
-`~/unix-toolkit-tools/<repo>/<bin>`: deploy first, then test the
+`~/unix-toolkit-tools/<repo>/<bin>`: install first, then test the
 installed binary.
 
 ## TASKS
@@ -256,9 +256,9 @@ never in repos.tsv.
 
 ## DEPLOYMENT
 
-Strict order: ship → deploy → sync. ship merges+pushes; deploy installs
+Strict order: ship → distribute → sync. ship merges+pushes; distribute pulls
 across all nodes; `miko sync <repo>` reconciles tasks (scoped) only after new state is live.
-A fix to a shared tool is complete only once deployed on every node using
+A fix to a shared tool is complete only once distributed on every node using
 it.
 Source of truth: the repo (`~/unix-toolkit-tools/<tool>`), never
 `~/.local/bin` directly. Syncing before tasks are marked done propagates
@@ -282,9 +282,9 @@ Per-fix flow:
 4. Confirmation before commit
 5. Commit: `type(scope): description`, <=60 chars, imperative, English
 6. ship the repo (merge, push, delete branch)
-7. deploy the repo (install locally, distribute to all nodes)
+7. distribute --install the repo (pulls + runs install.sh on all nodes)
 8. pull the full task list for the repo
-9. mark each task resolved by this deploy as done
+9. mark each task resolved by this distribution as done
 10. Confirm whether to continue or open another repo before syncing
 11. sync last, on confirmation -- `miko sync <repo>` scoped to the repo(s) touched
 
