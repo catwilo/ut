@@ -96,13 +96,27 @@ cmd_list() {
             return 0
             ;;
         local)
-            info "cmd: find \"$DST\" -maxdepth 2 -name .git"
-            bold "repos clonados en local ($DST):"
-            [ -d "$DST" ] || { warn "no existe: $DST"; return 0; }
-            ( cd "$DST" && for _d in */; do
-                _d="${_d%/}"
-                [ -d "$_d/.git" ] && printf '%s\n' "$_d"
-            done ) | sort | while IFS= read -r _r; do
+            # A repo is "local" if it is cloned somewhere on disk. Two
+            # locations count: the standard $DST directory (legacy default)
+            # and any path stored in repos.tsv column 6 (custom paths, e.g.
+            # musical projects under ~/musiq/). Both are scanned and merged.
+            info "cmd: find \"$DST\" -maxdepth 2 -name .git  +  repos.tsv column 6"
+            bold "repos clonados localmente:"
+            {
+                # Standard location.
+                if [ -d "$DST" ]; then
+                    ( cd "$DST" && for _d in */; do
+                        _d="${_d%/}"
+                        [ -d "$_d/.git" ] && printf '%s\n' "$_d"
+                    done )
+                fi
+                # Custom paths from repos.tsv column 6.
+                awk -F'\t' 'NR>1 && $6 != "" {print $1}' "$TSV" | while IFS= read -r _r; do
+                    [ -z "$_r" ] && continue
+                    _p="$(repo_dir "$_r")"
+                    [ -d "$_p/.git" ] && printf '%s\n' "$_r"
+                done
+            } | sort -u | while IFS= read -r _r; do
                 printf "  %s\n" "$_r"
             done
             return 0
