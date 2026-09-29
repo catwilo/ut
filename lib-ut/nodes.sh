@@ -219,7 +219,7 @@ _distribute_install_remote() {
 # its install.sh runs. HEAD convergence is verified after each pull.
 _distribute_one() {
     _repo="$1" _do_install="$2"
-    _target="$DST/$_repo"
+    _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
 
     if [ "$_do_install" = "1" ]; then
@@ -281,11 +281,21 @@ _distribute_one() {
 }
 
 _local_repo_names() {
-    [ -d "$DST" ] || return 0
-    ( cd "$DST" && for _d in */; do
-        _d="${_d%/}"
-        [ -d "$_d/.git" ] && printf '%s\n' "$_d"
-    done ) | sort
+    {
+        # Standard location: scan $DST for git dirs.
+        if [ -d "$DST" ]; then
+            ( cd "$DST" && for _d in */; do
+                _d="${_d%/}"
+                [ -d "$_d/.git" ] && printf '%s\n' "$_d"
+            done )
+        fi
+        # Alternate locations: any repo whose repos.tsv row has a path.
+        awk -F'\t' 'NR>1 && $6 != "" {print $1}' "$TSV" | while IFS= read -r _r; do
+            [ -z "$_r" ] && continue
+            _p="$(repo_dir "$_r")"
+            [ -d "$_p/.git" ] && printf '%s\n' "$_r"
+        done
+    } | sort -u
 }
 
 cmd_distribute() {
@@ -310,7 +320,7 @@ cmd_distribute() {
     _local_repo_names | while IFS= read -r _r; do
         [ -z "$_r" ] && continue
         grep -qxF "$_r" "$_corelist" || continue
-        _target="$DST/$_r"
+        _target="$(repo_dir "$_r")"
         _reason=$(_repo_is_dirty "$_target") && { warn "$_r  skipped: $_reason"; printf '%s\n' "$_r" >> "$_skipped"; continue; }
         if [ "$_install" = "1" ]; then
             info "cmd: ut distribute --install $_r"

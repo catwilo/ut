@@ -32,32 +32,48 @@ cmd_create() {
 }
 
 cmd_new() {
+    _at=""
+    # Parse --at <path> anywhere in the args.
+    _args=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --at)
+                shift
+                _at="${1:-}"
+                [ -z "$_at" ] && die "ut new: --at requires a path"
+                shift
+                ;;
+            *)  _args+=("$1"); shift ;;
+        esac
+    done
+    set -- "${_args[@]+"${_args[@]}"}"
     _repo="${1:-}"; _tags="${2:-}"; _desc="${3:-}"
-    [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut new <repo> <tags> \"<description>\""
+    [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut new <repo> <tags> \"<description>\" [--at <path>]"
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
     gh auth status >/dev/null 2>&1 || die "gh not authenticated -- run: gh auth login"
     info "cmd: gh repo create \"$GITHUB_USER/$_repo\" --private --description \"$_desc\""
     info "creating GitHub repo $GITHUB_USER/$_repo..."
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
-    printf '%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" >> "$TSV"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$GITHUB_USER" "$_at" >> "$TSV"
     ok "registered: $_repo in repos.tsv"
     _tsv_publish "register $_repo"
-    mkdir -p "$DST"
+    _clone_root="${_at:-$DST}"
+    mkdir -p "$_clone_root"
     _url="$(repo_url "$_repo")"
-    if ! git clone "$_url" "$DST/$_repo"; then
+    if ! git clone "$_url" "$_clone_root/$_repo"; then
         err "$_repo  clone failed"
         return 1
     fi
-    ok "$_repo cloned to $DST/$_repo"
-    printf '# %s\n\n%s\n' "$_repo" "$_desc" > "$DST/$_repo/README.md"
-    git -C "$DST/$_repo" add README.md
+    ok "$_repo cloned to $_clone_root/$_repo"
+    printf '# %s\n\n%s\n' "$_repo" "$_desc" > "$_clone_root/$_repo/README.md"
+    git -C "$_clone_root/$_repo" add README.md
     # --no-verify: this is the repo's first-ever commit, on main, before any
     # branch exists to receive the pre-commit hook -- the global hook blocks
     # direct commits on main/master, which would leave every new repo stuck
     # with README staged but uncommitted (see ut#11). This is the one
     # legitimate, intentional bypass the hook policy itself allows.
-    git -C "$DST/$_repo" commit --no-verify -m "docs: add README"
-    git -C "$DST/$_repo" push -u origin main || git -C "$DST/$_repo" push -u origin master || warn "push failed -- run manually"
+    git -C "$_clone_root/$_repo" commit --no-verify -m "docs: add README"
+    git -C "$_clone_root/$_repo" push -u origin main || git -C "$_clone_root/$_repo" push -u origin master || warn "push failed -- run manually"
     ok "initial commit pushed"
 
     _devices="$(_nodes_db)"
@@ -92,8 +108,8 @@ lines = [l for l in open(tsv).readlines() if not l.startswith(repo + "\t")]
 open(tsv, "w").writelines(lines)
 print(f"ok: {repo} removed from repos.tsv")
 PYEOF
-    if [ -d "$DST/$_repo" ]; then
-        maid trash "$DST/$_repo" && ok "local clone moved to trash" || warn "maid trash failed — remove $DST/$_repo manually"
+    if [ -d "$(repo_dir "$_repo")" ]; then
+        maid trash "$(repo_dir "$_repo")" && ok "local clone moved to trash" || warn "maid trash failed — remove $(repo_dir "$_repo") manually"
     fi
     _tsv_publish "delete $_repo"
 }
@@ -123,10 +139,29 @@ open(tsv, "w").writelines(out)
 print(f"ok: {old} -> {new} in repos.tsv")
 PYEOF
 
-    if [ -d "$DST/$_old" ]; then
-        mv "$DST/$_old" "$DST/$_new" && ok "local clone moved: $DST/$_old -> $DST/$_new" || warn "mv failed — move manually"
+    _old_path="$(repo_dir "$_old")"
+    if [ -d "$_old_path" ]; then
+        _new_path="$(dirname "$_old_path")/$_new"
+        mv "$_old_path" "$_new_path" && ok "local clone moved: $_old_path -> $_new_path" || warn "mv failed — move manually"
+        # Update column 6 to the new path so future repo_dir lookups work.
+        python3 - "$TSV" "$_new" "$_new_path" << 'RPYEOF'
+import sys
+tsv, new, new_path = sys.argv[1], sys.argv[2], sys.argv[3]
+lines = open(tsv).readlines()
+out = []
+for l in lines:
+    p = l.rstrip("\n").split("\t")
+    if p[0] == new:
+        while len(p) < 6:
+            p.append("")
+        p[5] = new_path
+        out.append("\t".join(p) + "\n")
+    else:
+        out.append(l)
+open(tsv, "w").writelines(out)
+RPYEOF
         _url="$(repo_url "$_new")"
-        git -C "$DST/$_new" remote set-url origin "$_url" && ok "remote URL updated" || warn "remote URL update failed"
+        git -C "$_new_path" remote set-url origin "$_url" && ok "remote URL updated" || warn "remote URL update failed"
     fi
 
     _tsv_publish "rename $_old -> $_new"

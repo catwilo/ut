@@ -5,6 +5,23 @@
 # by default: all except archive
 # if tag given: only that tag
 #  repos_all -- print all repo names from TSV, no filtering
+
+# repo_dir <repo> -- resolve the on-disk path for a repo.
+# Reads column 6 of repos.tsv ("path"). Empty/missing column means the
+# standard location ($DST/<repo>). This is the single source of truth for
+# locating a repo; callers must use this and never interpolate $DST
+# directly (ut#repo-dir).
+repo_dir() {
+    _rd_repo="$1"
+    [ -z "$_rd_repo" ] && { err "repo_dir: empty repo"; return 1; }
+    _rd_path=$(awk -F'\t' -v r="$_rd_repo" '$1==r {print $6; exit}' "$TSV")
+    if [ -n "$_rd_path" ]; then
+        printf '%s\n' "$_rd_path"
+    else
+        printf '%s\n' "$DST/$_rd_repo"
+    fi
+}
+
 repos_all() {
     tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
         [ -z "$name" ] && continue

@@ -67,7 +67,7 @@ cmd_add() {
     _repo="${1:-}"; _tags="${2:-}"; _desc="${3:-}"; _owner="${4:-$GITHUB_USER}"
     [ -z "$_repo" ] || [ -z "$_tags" ] || [ -z "$_desc" ] && die "usage: ut add <repo> <tags> <description> [owner]"
     grep -q "^$_repo	" "$TSV" && die "$_repo already in repos.tsv"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$_owner" >> "$TSV"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$_owner" "" >> "$TSV"
     ok "added: $_repo [$_tags] owner=$_owner"
 }
 cmd_untrack() {
@@ -84,7 +84,7 @@ lines = [l for l in open(tsv).readlines() if not l.startswith(repo + "\t")]
 open(tsv, "w").writelines(lines)
 print(f"ok: {repo} removed from repos.tsv")
 PYEOF
-    warn "local clone NOT removed -- delete $DST/$_repo manually if needed"
+    warn "local clone NOT removed -- delete $(repo_dir "$_repo") manually if needed"
 }
 
 # DEPRECATED: kept one cycle for backwards compatibility. Use 'ut untrack'.
@@ -96,7 +96,7 @@ cmd_unclone() {
     # If you want to nuke everything, see: ut delete (admin.sh).
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut unclone <repo>"
-    target="$DST/$_repo"
+    target="$(repo_dir "$_repo")"
     info "cmd: git -C \"$target\" status --short && maid trash \"$target\""
     [ -e "$target/.git" ] || die "$_repo not cloned locally at $target"
     _ahead=$(git -C "$target" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
@@ -165,7 +165,7 @@ cmd_info() {
     _row=$(grep "^$_repo	" "$TSV") || die "$_repo not found in repos.tsv"
     bold "── $_repo ──"
     printf '%s\n' "$_row" | awk -F'\t' '{printf "tags:  %s\ndesc:  %s\nstate: %s\nowner: %s\n", $2, $3, $4, $5}'
-    _target="$DST/$_repo"
+    _target="$(repo_dir "$_repo")"
     if [ -e "$_target/.git" ]; then
         printf "remote: "; git -C "$_target" remote get-url origin
         printf "branch: "; git -C "$_target" rev-parse --abbrev-ref HEAD

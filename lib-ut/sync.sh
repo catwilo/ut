@@ -22,7 +22,7 @@ cmd_sync() {
     errors=0
     repos_for_target "$_tag" | while IFS= read -r repo; do
         [ "$repo" = "unix-toolkit" ] && continue
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         if [ -e "$target/.git" ]; then
             info "cmd: git -C \"$target\" pull --rebase --autostash"
             if ! git -C "$target" pull --rebase --autostash 2>/dev/null; then
@@ -51,14 +51,23 @@ cmd_fetch() {
     _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-fetch-out.XXXXXX")
     printf '0' > "$_errfile"
 
-    repos_for_target "$_tag" \
-        | DST="$DST" xargs -P 8 -I{} sh -c \
-            'if [ -d "$DST/{}/.git" ]; then
-                git -C "$DST/{}" fetch --quiet 2>/dev/null \
-                    && printf "ok {}\n" \
-                    || printf "fail {}\n"
-            fi' \
-        > "$_outfile" 2>/dev/null
+    # Build a "name<TAB>path" list (repo_dir resolves custom paths), then
+    # fan out the fetch across 8 workers. Path is baked into each line so
+    # the parallel worker never has to look anything up.
+    _pairs=$(repos_for_target "$_tag" | while IFS= read -r _r; do
+        [ -z "$_r" ] && continue
+        printf '%s\t%s\n' "$_r" "$(repo_dir "$_r")"
+    done)
+    if [ -n "$_pairs" ]; then
+        printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c \
+            '_r="${1%%	*}"; _p="${1#*	}"
+             if [ -d "$_p/.git" ]; then
+                 git -C "$_p" fetch --quiet 2>/dev/null \
+                     && printf "ok %s\n" "$_r" \
+                     || printf "fail %s\n" "$_r"
+             fi' _ {} \
+            > "$_outfile" 2>/dev/null
+    fi
 
     while IFS= read -r _line; do
         case "$_line" in
@@ -84,7 +93,7 @@ cmd_push() {
     fi
     # push all tool repos
     repos_for_target "$_tag" | while IFS= read -r repo; do
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         [ -e "$target/.git" ] || continue
         _ahead=$(git -C "$target" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
         if [ "$_ahead" -gt 0 ]; then
@@ -103,7 +112,7 @@ cmd_run() {
     shift
     _tag="${1:-}"
     repos_for_target "$_tag" | while IFS= read -r repo; do
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         [ -e "$target/.git" ] || { warn "$repo — not cloned, skipping"; continue; }
         bold "── $repo ──"
         (cd "$target" && eval "$_cmd") || err "$repo — command failed"
@@ -124,7 +133,7 @@ cmd_clone() {
         fi
     }
     _clone_list "$@" | while IFS= read -r repo; do
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         if [ -e "$target/.git" ]; then
             info "$repo — already cloned, skipping"
             _url="$(repo_url "$repo")"
@@ -143,7 +152,7 @@ cmd_install() {
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut install <repo>"
     grep -q "^$_repo	" "$TSV" || die "$_repo not found in repos.tsv"
-    target="$DST/$_repo"
+    target="$(repo_dir "$_repo")"
     if [ -e "$target/.git" ]; then
         info "$_repo -- already cloned, nothing to do"
         return 0
@@ -162,7 +171,7 @@ cmd_diff() {
     _tag="${1:-}"
     _found=0
     repos_for_target "$_tag" | while IFS= read -r repo; do
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         [ -e "$target/.git" ] || continue
         _dirty=$(git -C "$target" status --short 2>/dev/null)
         if [ -n "$_dirty" ]; then
@@ -177,7 +186,7 @@ cmd_diff() {
 cmd_ship() {
     _repo="${1:-}"
     [ -z "$_repo" ] && die "usage: ut ship <repo>"
-    _target="$DST/$_repo"
+    _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
     _branch=$(git -C "$_target" rev-parse --abbrev-ref HEAD)
     [ "$_branch" = "main" ] && die "already on main — nothing to ship"
@@ -198,7 +207,7 @@ cmd_branch() {
     _repo="${1:-}"; _name="${2:-}"
     [ -z "$_repo" ] || [ -z "$_name" ] && die "usage: ut branch <repo> <name>"
     grep -q "^$_repo	" "$TSV" || die "$_repo not found in repos.tsv"
-    _target="$DST/$_repo"
+    _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
 
     _stashed=0

@@ -38,7 +38,7 @@ cmd_status() {
     rm -rf "$_snap_dir"; mkdir -p "$_snap_dir"
     repos_for_target "$_tag" | while IFS= read -r repo; do
         read -r _t _i < "$_tmp"; _t=$((_t+1))
-        target="$DST/$repo"
+        target="$(repo_dir "$repo")"
         if [ ! -e "$target/.git" ]; then
             warn "$repo  NOT CLONED"; _i=$((_i+1))
             printf '%s\n' "$repo" >> "$_missing_file"
