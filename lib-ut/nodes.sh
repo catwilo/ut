@@ -207,8 +207,13 @@ cmd_machines() {
 # that as "not cloned yet" and falls back to remote `ut install`.
 _remote_repo_path() {
     _rrp_alias="$1" _rrp_repo="$2"
+    # Ensure remote ut is current so cmd_path exists.
     nssh "$_rrp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
-    nssh "$_rrp_alias" "ut path $_rrp_repo" 2>/dev/null | tr -d '\r'
+    # `ut path` only resolves the configured location; it does not check
+    # that the repo is actually present. We need a real .git to treat it
+    # as cloned. If absent, print nothing so the caller falls through to
+    # remote `ut install`.
+    nssh "$_rrp_alias" "p=\$(ut path $_rrp_repo 2>/dev/null); [ -n \"\$p\" ] && [ -d \"\$p/.git\" ] && printf '%s' \"\$p\"" 2>/dev/null | tr -d '\r'
 }
 
 # _distribute_install_remote <repo> <alias> -- run install.sh on a remote node.
