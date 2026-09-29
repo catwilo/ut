@@ -219,11 +219,20 @@ cmd_branch() {
     fi
 
     _cur_branch=$(git -C "$_target" branch --show-current 2>/dev/null || echo main)
-    if ! git -C "$_target" pull --rebase --autostash origin "$_cur_branch"; then
+    # If the current branch only exists locally (typical after a prior
+    # `ut branch` that committed but never shipped), pulling it from origin
+    # fails -- origin has no such ref. In that case rebase against
+    # origin/main, which is the base every new branch starts from.
+    if git -C "$_target" rev-parse --verify "origin/$_cur_branch" >/dev/null 2>&1; then
+        _base_ref="origin/$_cur_branch"
+    else
+        _base_ref="origin/main"
+        info "origin/$_cur_branch not found -- rebasing against origin/main"
+    fi
+    if ! git -C "$_target" pull --rebase --autostash "$_base_ref"; then
         die "pull --rebase failed on $_repo"
     fi
-    ok "pulled origin/$_cur_branch"
-
+    ok "pulled $_base_ref"
     git -C "$_target" checkout -b "$_name" || die "checkout -b failed"
     ok "on branch $_name"
 
