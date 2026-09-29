@@ -29,7 +29,7 @@ Run `ut` without args for the full command list with descriptions.
 
     ut list                    list all registered repos
     ut list <tag>              filter by tag
-    ut list local              only cloned repos
+    ut list local              cloned repos (any path: $DST or custom)
     ut list cloud              only repos that exist on GitHub
     ut list orphans            local clones not in repos.tsv
     ut status                  git state per repo (dirty/ahead/behind/branch)
@@ -51,6 +51,7 @@ for code. Global sync is for explicit manual use.
 
     ut clone [tag]             clone all (or tagged) registered repos
     ut install <repo>          clone one registered repo not yet local
+                               (respects repos.tsv column 6 for custom paths)
     ut branch <repo> <branch>  pull+rebase, create branch (autostash)
     ut ship <repo>             rebase+merge+push, delete branch
 
@@ -64,13 +65,28 @@ for code. Global sync is for explicit manual use.
     ut resume <repo>                 mark as active
     ut archive <repo>                mark as archived
     ut info <repo>                   show metadata + git state
+    ut path <repo>                   print resolved on-disk path (for scripts)
 
 ### GitHub (destructive)
 
     ut new <repo> <tags> '<desc>'      create + clone + distribute to nodes
+    ut new ... --at <dir>              clone under <dir>/<repo> instead of $DST
+                                       (custom path stored in repos.tsv col 6)
     ut create <repo> <tags> '<desc>'   create on GitHub only (alias of new)
     ut delete <repo>                   delete on GitHub + untrack + trash
     ut rename <old> <new>              rename on GitHub + propagate to nodes
+
+### Custom paths (repos.tsv column 6)
+
+Every repos.tsv row has an optional 6th column with an absolute path.
+Empty means the standard location (`$DST/<repo>`, i.e.
+`~/unix-toolkit-tools/<repo>`). Non-empty means that exact path is used
+by every ut command that touches the repo's files. Set at creation with
+`ut new ... --at <dir>`, honored by `path`, `list local`, `install`,
+`info`, `branch`, `ship`, `distribute`, `unclone`, `rename`.
+
+No other command may hardcode `$DST/$repo`. All path resolution goes
+through the `repo_dir` helper (lib-ut/query.sh).
 
 ### Nodes (multi-machine)
 

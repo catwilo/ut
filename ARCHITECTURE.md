@@ -15,7 +15,7 @@ two systems are independent and share only the name.
 | File | Responsibility |
 |---|---|
 | `ut` | Entrypoint. Parse command, source libs, dispatch. ~145 lines. |
-| `repos.tsv` | Registry. TSV: name, tags, description, state. Source of truth. |
+| `repos.tsv` | Registry. TSV: name, tags, description, state, owner, path. Source of truth. Column 6 (path) is optional; empty means standard location. |
 | `lib-ut/*.sh` | Command implementations, one concern per file. |
 | `ut-collect.sh` | POSIX collector. Emits per-repo git state for `ut machines diff`. |
 | `install.sh` | Symlinks `ut` into PATH; populates git hooks in all repos. |
@@ -27,7 +27,7 @@ two systems are independent and share only the name.
 | File | Responsibility |
 |---|---|
 | `changelog.sh` | `log_change()`. Appends distribute/install events. |
-| `query.sh` | Repo listing/filtering by tag or name. `repos_for_target()`. |
+| `query.sh` | Repo listing/filtering by tag or name (`repos_for_target()`). **`repo_dir()`** is the single source of truth for resolving a repo's on-disk path; **`cmd_path()`** exposes it as `ut path <repo>` for scripts and remote distribute. |
 | `status.sh` | `cmd_status()`. Git state: fetch, snapshots local+remote, diff. |
 | `sync.sh` | `cmd_sync()`. Pulls all repos, self-updates ut. |
 | `registry.sh` | `cmd_add/untrack/unclone/tag/pause/resume/archive/info`. Edits repos.tsv. |
@@ -70,6 +70,20 @@ two systems are independent and share only the name.
 - **Symlink install, never copy.** `install.sh` symlinks `ut` from the
   repo into PATH. Deleting the repo breaks the install by design (the
   repo is the source of truth).
+- **All repo path resolution goes through `repo_dir`.** No file under
+  `lib-ut/` may hardcode `$DST/$repo` (except `query.sh` itself, where
+  the fallback lives). The repo lives either at `$DST/<repo>` (col 6
+  empty) or at the exact path stored in col 6. Commands that touch the
+  filesystem -- `info`, `list local`, `install`, `branch`, `ship`,
+  `distribute`, `unclone`, `rename` -- all call `repo_dir`. New commands
+  must do the same; a grep for `$DST/` outside `query.sh` should return
+  nothing.
+- **Remote distribute resolves the path dynamically.** `_remote_repo_path`
+  asks each remote to print `ut path <repo>` and checks that the result
+  actually contains a `.git` before treating it as cloned. If it does
+  not, the remote falls back to `ut install <repo>`, which honors the
+  same column 6. Custom paths therefore work across nodes without any
+  hardcoded knowledge on the origin side.
 
 ## Status report
 
