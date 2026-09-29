@@ -62,3 +62,4 @@ redmi15c-setup	tool	Idempotent, verifiable, reversible Android setup tool for Re
 biwa	tool,cli	Bitwarden CLI wrapper: fast password and TOTP retrieval to Android clipboard	active		
 konekochan	tool,app	Multi-cat oneko launcher with per-cat behaviors (circle, star) and speed	active		
 pdftool	tool	PDF table extraction and normalization CLI	active		
+adam	music	proyecto musical personal - baterias, patrones, composiciones	active	catwilo	/data/data/com.termux/files/home/musiq
