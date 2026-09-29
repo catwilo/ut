@@ -54,7 +54,14 @@ cmd_new() {
     info "cmd: gh repo create \"$GITHUB_USER/$_repo\" --private --description \"$_desc\""
     info "creating GitHub repo $GITHUB_USER/$_repo..."
     gh repo create "$GITHUB_USER/$_repo" --private --description "$_desc" || die "gh repo create failed"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$GITHUB_USER" "$_at" >> "$TSV"
+    # Store the FINAL clone path (not the parent passed to --at) so
+    # repo_dir can resolve it directly without guessing.
+    _stored_path=""
+    if [ -n "$_at" ]; then
+        # Resolve to an absolute path when possible, fall back to as-given.
+        _stored_path="${_at%/}/$_repo"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_repo" "$_tags" "$_desc" "active" "$GITHUB_USER" "$_stored_path" >> "$TSV"
     ok "registered: $_repo in repos.tsv"
     _tsv_publish "register $_repo"
     _clone_root="${_at:-$DST}"
