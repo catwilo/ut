@@ -224,12 +224,12 @@ cmd_branch() {
     # fails -- origin has no such ref. In that case rebase against
     # origin/main, which is the base every new branch starts from.
     if git -C "$_target" rev-parse --verify "origin/$_cur_branch" >/dev/null 2>&1; then
-        _base_ref="origin/$_cur_branch"
+        _base_ref="$_cur_branch"
     else
-        _base_ref="origin/main"
+        _base_ref="main"
         info "origin/$_cur_branch not found -- rebasing against origin/main"
     fi
-    if ! git -C "$_target" pull --rebase --autostash "$_base_ref"; then
+    if ! git -C "$_target" pull --rebase --autostash origin "$_base_ref"; then
         die "pull --rebase failed on $_repo"
     fi
     ok "pulled $_base_ref"
