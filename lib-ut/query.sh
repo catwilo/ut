@@ -150,3 +150,14 @@ cmd_list() {
         fi
     done
 }
+
+
+# cmd_path <repo> -- print the resolved on-disk path for a repo.
+# Machine-readable (no colors, no extra text): designed to be consumed
+# by remote distribute / scripts. Uses repo_dir, so custom paths from
+# repos.tsv column 6 are honored.
+cmd_path() {
+    _repo="${1:-}"
+    [ -z "$_repo" ] && die "usage: ut path <repo>"
+    repo_dir "$_repo"
+}

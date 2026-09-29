@@ -72,6 +72,7 @@ print_help() {
   printf "  ut resume <repo>             -- marca el repo como activo\n"
   printf "  ut archive <repo>            -- marca el repo como archivado\n"
   printf "  ut info <repo>               -- muestra los datos del repo\n"
+  printf "  ut path <repo>               -- imprime la ruta en disco (para scripts)\n"
   printf "\nGITHUB  [destructivo -- modifica GitHub]\n"
   printf "  ut new <repo> <tags> '<desc>' [--at <path>]  -- crea repo + clona + sincroniza\n"
   printf "                                       --at: clonar en un path custom (ej. proyectos musicales)\n"
@@ -128,6 +129,7 @@ case "$CMD" in
     delete)     cmd_delete     "$@" ;;
     rename)     cmd_rename     "$@" ;;
     info)       cmd_info       "$@" ;;
+    path)       cmd_path      "$@" ;;
     ship)       cmd_ship       "$@" ;;
     branch)     cmd_branch     "$@" ;;
     distribute) cmd_distribute "$@" ;;

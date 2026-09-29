@@ -201,12 +201,26 @@ cmd_machines() {
     done <<< "$(_all_nodes_aliases)"
 }
 
+# _remote_repo_path <alias> <repo> -- path to the repo on the remote node.
+# Updates the remote ut first (so cmd_path exists) and asks it to resolve
+# the path. Empty output means the remote cannot resolve it; caller treats
+# that as "not cloned yet" and falls back to remote `ut install`.
+_remote_repo_path() {
+    _rrp_alias="$1" _rrp_repo="$2"
+    nssh "$_rrp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
+    nssh "$_rrp_alias" "ut path $_rrp_repo" 2>/dev/null | tr -d '\r'
+}
+
 # _distribute_install_remote <repo> <alias> -- run install.sh on a remote node.
 _distribute_install_remote() {
     _repo="$1" _alias="$2"
-    _rbase="unix-toolkit-tools/$_repo"
-    info "cmd: nssh \"$_alias\" \"bash ~/$_rbase/install.sh\""
-    if ! nssh "$_alias" "bash ~/$_rbase/install.sh"; then
+    _rpath="$(_remote_repo_path "$_alias" "$_repo")"
+    if [ -z "$_rpath" ]; then
+        warn "$_alias — cannot resolve repo path, skipping install"
+        return 1
+    fi
+    info "cmd: nssh \"$_alias\" \"bash $_rpath/install.sh\""
+    if ! nssh "$_alias" "bash $_rpath/install.sh"; then
         warn "$_alias — install.sh failed"
         return 1
     fi
@@ -233,7 +247,6 @@ _distribute_one() {
         fi
     fi
 
-    _rbase="unix-toolkit-tools/$_repo"
     _devices="$(_nodes_db)"
     [ -f "$_devices" ] || die "device table not found: $_devices"
     while IFS= read -r alias; do
@@ -249,20 +262,28 @@ _distribute_one() {
             warn "$alias — skipped (unreachable: $ip:$_port)"
             continue
         fi
-        if ! nssh "$alias" "[ -d ~/$_rbase/.git ]" 2>/dev/null; then
-            nssh "$alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main" >/dev/null 2>&1 || true
+        # Resolve the repo path on the remote. Updates remote ut first so
+        # `ut path` exists there. Empty result means the repo isn't cloned
+        # yet on that node.
+        _rpath="$(_remote_repo_path "$alias" "$_repo")"
+        if [ -z "$_rpath" ]; then
             info "cmd: nssh \"$alias\" \"ut install $_repo\""
-            info "$alias — $_repo not cloned, installing..."
+            info "$alias — $_repo not resolved remotely, installing..."
             if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
                 warn "$alias — $_repo auto-install failed, skipping"
                 continue
             fi
+            _rpath="$(_remote_repo_path "$alias" "$_repo")"
+            if [ -z "$_rpath" ]; then
+                warn "$alias — ut still cannot resolve path after install, skipping"
+                continue
+            fi
         fi
         _local_head="$(git -C "$_target" rev-parse HEAD 2>/dev/null || printf '')"
-        info "cmd: nssh \"$alias\" \"git -C ~/$_rbase pull --rebase origin main\""
-        info "distributing $_repo -> $alias..."
-        nssh "$alias" "git -C ~/$_rbase pull --rebase origin main" || { err "$alias — distribution failed"; continue; }
-        _remote_head="$(nssh "$alias" "git -C ~/$_rbase rev-parse HEAD" 2>/dev/null || printf '')"
+        info "cmd: nssh \"$alias\" \"git -C $_rpath pull --rebase origin main\""
+        info "distributing $_repo -> $alias (path $_rpath)..."
+        nssh "$alias" "git -C $_rpath pull --rebase origin main" || { err "$alias — distribution failed"; continue; }
+        _remote_head="$(nssh "$alias" "git -C $_rpath rev-parse HEAD" 2>/dev/null || printf '')"
         if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
             err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
             continue
