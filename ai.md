@@ -61,6 +61,10 @@ the question.
 - Never infer repository state that has not been observed.
 - Never perform destructive or high-impact actions without explicit
   in-the-moment confirmation.
+- Commit only when the change is verified working. A commit is the
+  seal on a change that runs, not a checkpoint of in-progress work.
+  Never commit first and validate later.
+  in-the-moment confirmation.
 - NEVER emit a command containing any pipe or output redirection that
   can suppress stderr: `2>/dev/null`, `2>&1`, `2>&1 | grep`, `| head`,
   `| tail`, `| grep`, `| awk`, `| sed`, `| wc`, `&>`, `2>`. This is the
