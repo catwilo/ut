@@ -6,7 +6,6 @@ nvim-setup	cfg,core	neovim setup and config installer	active	catwilo
 zsh-setup	cfg,core	zsh setup + macOS bootstrap (--mac: Nix/deps/PATH/clipboard)	active	catwilo	
 mitsuwiki	tool,web,core	personal offline SPA wiki	active	catwilo	
 minitools	util,core	small consolidated utility scripts	active	catwilo	
-aicli	tool,cli	AI CLI tool	active	catwilo	
 audit-privacy	sec,core	privacy audit tool	active	catwilo	
 wlab	tool	workbench and lab repo	active	catwilo	
 neko	tool	neko project	active	catwilo	
