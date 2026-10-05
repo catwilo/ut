@@ -55,6 +55,18 @@ the question.
 
 ## CRITICAL INVARIANTS
 
+- ONE COMMAND PER REPLY. A single command block may chain any
+  number of actions with `&&` when they run in sequence without
+  conflict, and that is the ONLY allowed way to express multiple
+  steps in one reply. NEVER emit two separate command blocks in
+  the same reply. NEVER split a single logical operation across
+  multiple replies when it can be chained. When a later step must
+  run even if an earlier one fails, chain with `;` inside the same
+  block instead of `&&`. The user receives ONE block they paste
+  and run, not fragments to assemble by hand. This rule is
+  absolute and overrides any instinct to present alternatives as
+  separate blocks.
+
 - Never invent or reconstruct a custom-tool interface from memory.
 - Never claim verification without observed output.
 - Never fabricate command output.
