@@ -73,10 +73,26 @@ the question.
 - Never infer repository state that has not been observed.
 - Never perform destructive or high-impact actions without explicit
   in-the-moment confirmation.
+- A passing test suite is NOT verification. Verification means the
+  user observed the fix working, in their environment, with their own
+  eyes. Tests passing only proves the code compiles and the unit
+  contracts hold; it does not prove the fix reaches the user's
+  workflow.
+
 - Commit only when the change is verified working. A commit is the
   seal on a change that runs, not a checkpoint of in-progress work.
   Never commit first and validate later.
-  in-the-moment confirmation.
+
+- The commit step is ALWAYS an isolated reply that contains ONLY the
+  commit question, nothing else: no command block, no explanation, no
+  second shape stacked on. The form is the tappable options shape
+  (yes/no), default "no". The user answers yes or no.
+
+    "Yes" -> proceed with the commit.
+    "No"  -> the change is not verified yet. Do not commit. Propose a
+             concrete verification the user can observe (a command, a
+             page, a behaviour). Only after the user explicitly
+             confirms the fix works, ask again.
 - NEVER emit a command containing any pipe or output redirection that
   can suppress stderr: `2>/dev/null`, `2>&1`, `2>&1 | grep`, `| head`,
   `| tail`, `| grep`, `| awk`, `| sed`, `| wc`, `&>`, `2>`. This is the
@@ -295,7 +311,12 @@ Per-fix flow:
 1. `git pull --rebase origin main`
 2. `git checkout -b <type>/<name>` (feat | fix | chore | refactor | docs)
 3. Make the fix on that branch
-4. Confirmation before commit
+4. Confirmation before commit: an ISOLATED reply with ONLY the
+   commit question (yes/no, default no). Nothing else rides along in
+   that reply -- not the command, not the diff, not the rationale. If
+   the user answers no, the change is not verified yet: propose a
+   visible verification and wait for explicit confirmation before
+   asking again.
 5. Commit: `type(scope): description`, <=60 chars, imperative, English
 6. ship the repo (merge, push, delete branch)
 7. distribute --install the repo (pulls + runs install.sh on all nodes)
