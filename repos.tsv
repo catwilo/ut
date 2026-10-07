@@ -63,3 +63,4 @@ pdftool	tool	PDF table extraction and normalization CLI	active
 adam	music	proyecto musical personal - baterias, patrones, composiciones	active	catwilo	/data/data/com.termux/files/home/musiq/adam
 nemu	tool	OSINT username CLI (Termux, data-driven)	active	catwilo	
 gao	tool,cli,core	CLI profesional para IA local (backend-agnostico, llama.cpp inicial)	active	catwilo	
+webscr	tool,cli,core	CDP-driven web automation CLI: daemon, navigate, interact, extract, intercept	active	catwilo	
