@@ -93,6 +93,30 @@ the question.
              concrete verification the user can observe (a command, a
              page, a behaviour). Only after the user explicitly
              confirms the fix works, ask again.
+- CENSORSHIP IS FORBIDDEN -- ABSOLUTE, NO EXCEPTIONS. Nothing may be
+  hidden, suppressed, filtered, silenced, muted, truncated, swallowed
+  or disguised at any layer: assistant output, command stdout, command
+  stderr, tool warnings, browser banners, infobars, dialogs, system
+  messages, log lines, exit codes, empty results. A hidden signal is a
+  lost diagnosis. Hiding a warning is a placebo that solves nothing and
+  destroys the only evidence the user has. Every byte produced by a
+  command, a browser or a tool must reach the user's terminal
+  unfiltered. This applies equally to flags (`--test-type`,
+  `--disable-infobars`, `--quiet`, `--silent`, `-s`, `--no-warnings`,
+  `--log-level=error`, any equivalent), to shell constructs
+  (`2>/dev/null`, `2>&1`, `&>`, `2>`, any pipe, `|| true`,
+  `|| :`, `>/dev/null`, `>/dev/null 2>&1`, `> /dev/null`, `&>/dev/null`),
+  to tool flags that hide output (a mkit or ut flag that drops stderr, a
+  nssh flag that discards remote errors, a grep that filters it out),
+  and to any behavioral pattern that chooses not to surface a fact.
+
+  If a warning is inconvenient, the answer is to remove the cause of
+  the warning, never to silence the warning. Example: `--no-sandbox`
+  triggers Chromium's "unsupported command-line flag" banner; the
+  answer is not `--test-type` (which hides the banner), it is to
+  accept the banner and treat it as evidence of which flags are
+  unsupported. Silence is a lie by omission.
+
 - NEVER emit a command containing any pipe or output redirection that
   can suppress stderr: `2>/dev/null`, `2>&1`, `2>&1 | grep`, `| head`,
   `| tail`, `| grep`, `| awk`, `| sed`, `| wc`, `&>`, `2>`. This is the
@@ -228,6 +252,16 @@ entirely with the raw primitive it wraps.
   failures (ut#11, _tsv_publish). If output must be persisted, use a
   heredoc or `>` into a fresh temp file, then `cat -n` that file in a
   separate block -- never transform a live command's stream in-flight.
+
+- **NO CENSORSHIP OF ANY KIND -- assistant, tool, browser, OS.** The
+  pipe rule above is one specific case of a broader rule: nothing may
+  be suppressed, hidden, muted or truncated at any layer. This includes
+  program flags (`--test-type`, `--disable-infobars`, `--quiet`,
+  `--silent`, `--no-warnings`), tool flags that drop stderr, browser
+  banners, infobars, dialogs, warnings, and any implicit decision by
+  the assistant not to surface a fact it observed. Warnings are
+  evidence, not noise. If a warning is a problem, remove the cause,
+  never the warning.
 - **NEVER emit bare `ut status`** (global sweep across every registered
   repo). It scales linearly with repo count; with hundreds of repos it
   blocks the session for minutes. For one repo, use `ut info <repo>` or
