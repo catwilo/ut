@@ -64,3 +64,4 @@ adam	music	proyecto musical personal - baterias, patrones, composiciones	active	
 nemu	tool	OSINT username CLI (Termux, data-driven)	active	catwilo	
 gao	tool,cli,core	CLI profesional para IA local (backend-agnostico, llama.cpp inicial)	active	catwilo	
 webscr	tool,cli,core	CDP-driven web automation CLI: daemon, navigate, interact, extract, intercept	active	catwilo	
+mnm	tool,cli,net,core	MITM proxy CLI for delegated web auth -- install, capture, export cookies	active	catwilo	
