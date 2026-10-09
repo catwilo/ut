@@ -3,6 +3,16 @@
 # usage: ut <command> [args]  -- run ut without args for full command list
 set -eu
 
+# Force gh (and every other CLI in its stack) to emit plain text on stderr
+# and stdout: no ANSI colors, no TTY-style box drawing, no interactive
+# pager. This removes the cause of the "weird characters" gh injects when
+# it thinks it is talking to a terminal -- nothing is hidden, gh simply
+# prints text. Set here so every ut invocation is protected.
+export NO_COLOR=1
+export CLICOLOR=0
+export GH_FORCE_TTY=0
+export GH_PAGER=cat
+
 G='\033[32m'; Y='\033[33m'; R='\033[31m'; C='\033[36m'; B='\033[1m'; Z='\033[0m'
 ok()   { printf "${G}✓ %s${Z}\n" "$*"; }
 warn() { printf "${Y}⚠ %s${Z}\n" "$*"; }
