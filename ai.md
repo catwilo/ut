@@ -451,6 +451,27 @@ not a repo, path: `~/.tasks/miko-geral`.
   is already pushed by ship itself. Do NOT call `ut sync` to "confirm".
   Only run a global sync on an explicit, in-the-moment user request.
 
+## TESTS OUTPUT
+
+Whenever a test suite is executed for the user, the output MUST be
+self-describing, ordered, and complete on paste. This is a standing
+standard, not a per-session request:
+
+- One line per test, never an in-place counter (`\r`) that overwrites
+  the same terminal line -- an overwritten counter vanishes on paste.
+- Each line carries: `[N/total]` (index and grand total), a PASS/FAIL
+  marker, the file the test lives in, and the test's own title.
+- Failures print their detail lines directly under the failing test,
+  indented, so the reason is co-located with the case.
+- A final `[INFO] N passed, M failed, total` line closes the run.
+- The number `N` and the total `total` are computed automatically --
+  adding a test file or a case must not require hand-maintaining the
+  counters anywhere.
+- Repos that already wrap a test runner (BATS, pytest, etc.) implement
+  this by a thin presentation layer over the runner's machine format
+  (TAP, JUnit XML), never by hand-emitting per-test lines in the test
+  files themselves.
+
 ## RISK
 
 High-impact commands (firewall, disk, `git push --force`, package
