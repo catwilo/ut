@@ -132,18 +132,21 @@ cmd_clone() {
             for _a in "$@"; do repos_for_target "$_a"; done
         fi
     }
-    _clone_list "$@" | while IFS= read -r repo; do
+    while IFS= read -r repo; do
         target="$(repo_dir "$repo")"
         if [ -e "$target/.git" ]; then
             info "$repo — already cloned, skipping"
-            _url="$(repo_url "$repo")"
-            info "cmd: git clone $_url \"$target\""
-            git clone "$_url" "$target" \
-            git clone "git@github.com:$GITHUB_USER/$repo.git" "$target" \
-                && ok "$repo cloned" \
-                || { err "$repo — clone failed"; errors=$((errors+1)); }
+            continue
         fi
-    done
+        _url="$(repo_url "$repo")"
+        info "cmd: git clone $_url \"$target\""
+        if git clone "$_url" "$target"; then
+            ok "$repo cloned"
+        else
+            err "$repo — clone failed"
+            errors=$((errors+1))
+        fi
+    done < <(_clone_list "$@")
     [ "$errors" -eq 0 ] && ok "all repos cloned" || { err "$errors repo(s) failed"; exit 1; }
     printf '\n'; cmd_list local
 }
@@ -205,12 +208,26 @@ cmd_ship() {
 
 cmd_branch() {
     _repo="${1:-}"; _name="${2:-}"
-    [ -z "$_repo" ] || [ -z "$_name" ] && die "usage: ut branch <repo> <name>"
+    { [ -z "$_repo" ] || [ -z "$_name" ]; } && die "usage: ut branch <repo> <name>"
     grep -q "^$_repo	" "$TSV" || die "$_repo not found in repos.tsv"
     _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
 
     _stashed=0
+    _stash_restored=0
+    _restore_stash_on_exit() {
+        [ "$_stashed" -eq 1 ] && [ "$_stash_restored" -eq 0 ] || return 0
+        err "ut branch aborted — restoring stashed changes"
+        if git -C "$_target" stash pop; then
+            _stash_restored=1
+            ok "stash restored after abort"
+        else
+            err "stash pop conflict — resolve manually:"
+            err "  git -C $_target stash list"
+            err "  git -C $_target stash pop"
+        fi
+    }
+    trap '_restore_stash_on_exit' EXIT
     if [ -n "$(git -C "$_target" status --short 2>/dev/null)" ]; then
         _stash_msg="ut-branch-autostash-$(date +%s)"
         git -C "$_target" stash push -m "$_stash_msg" || die "stash failed"
@@ -229,7 +246,7 @@ cmd_branch() {
         _base_ref="main"
         info "origin/$_cur_branch not found -- rebasing against origin/main"
     fi
-    if ! git -C "$_target" pull --rebase --autostash origin "$_base_ref"; then
+    if ! git -C "$_target" pull --rebase origin "$_base_ref"; then
         die "pull --rebase failed on $_repo"
     fi
     ok "pulled $_base_ref"
@@ -237,6 +254,7 @@ cmd_branch() {
     ok "on branch $_name"
 
     if [ "$_stashed" -eq 1 ]; then
+        _stash_restored=1   # claim responsibility: trap must not retry after this
         if git -C "$_target" stash pop; then
             ok "stash restored"
         else
