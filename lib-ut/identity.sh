@@ -224,3 +224,15 @@ node_alias_set() {
     }
 }
 
+
+# repo_color <tool> -- ANSI color code for the tool owning a repo.
+# Empty or unknown tool -> empty string (repo belongs to ut -> neutral,
+# terminal default). Single source of truth for the tool->color map.
+repo_color() {
+    case "${1:-}" in
+        miau-dio) printf '[93m' ;;
+        rpx)      printf '[91m' ;;
+        ksite)    printf '[94m' ;;
+        *)        printf '[92m' ;;
+    esac
+}

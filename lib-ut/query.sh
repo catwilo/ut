@@ -149,20 +149,36 @@ cmd_list() {
     if [ -n "$_tag" ] && ! grep -q ",$_tag," <(tail -n +2 "$TSV" | cut -f2 | sed 's/^/,/;s/$/,/') \
        && grep -q "^${_tag}	" "$TSV"; then
         bold "repos [repo: $_tag]:"
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
-            case "$name" in "$_tag") printf "  %-35s ${C}%-10s${Z} %s\n" "$name" "$tags" "$desc" ;; esac
+        tail -n +2 "$TSV" | awk -F'\t' '{print $1 "\001" $2 "\001" $3 "\001" $4 "\001" $5 "\001" $6 "\001" $7}' | while IFS=$'\001' read -r name tags desc state owner path tool; do
+            [ "$name" = "$_tag" ] || continue
+            _col="$(repo_color "$tool")"
+            printf "  %s%-35s${Z} ${C}%-10s${Z} %s\n" "$_col" "$name" "$tags" "$desc"
         done
         return 0
     fi
     bold "repos${_tag:+ [tag: $_tag]}:"
-    tail -n +2 "$TSV" | while IFS='	' read -r name tags desc state owner; do
-        [ -z "$name" ] && continue
-        if [ -n "$_tag" ]; then
-            case ",$tags," in *",$_tag,"*) printf "  %-35s ${C}%-10s${Z} %s\n" "$name" "$tags" "$desc" ;; esac
-        else
-            printf "  %-35s ${C}%-10s${Z} %s\n" "$name" "$tags" "$desc"
-        fi
-    done
+    tail -n +2 "$TSV" | awk -F'\t' '
+{
+    tool = $7
+    if (tool == "miau-dio") g = 1
+    else if (tool == "rpx") g = 2
+    else if (tool == "ksite") g = 3
+    else g = 4
+    bucket[g] = bucket[g] $1 "\001" $2 "\001" $3 "\001" $4 "\001" $5 "\001" $6 "\001" $7 "\n"
+}
+END {
+    for (g = 1; g <= 4; g++) printf "%s", bucket[g]
+}' | while IFS=$'\001' read -r name tags desc state owner path tool; do
+    [ -z "$name" ] && continue
+    if [ -n "$_tag" ]; then
+        case ",$tags," in
+            *",$_tag,"*) ;;
+            *) continue ;;
+        esac
+    fi
+    _col="$(repo_color "$tool")"
+    printf "  %s%-35s${Z} ${C}%-10s${Z} %s\n" "$_col" "$name" "$tags" "$desc"
+done
 }
 
 
