@@ -240,21 +240,48 @@ _distribute_install_remote() {
     ok "$_alias — installed"
 }
 
-# _distribute_one <repo> <install:0|1>
-# Pulls (and optionally installs) one repo on every peer. With install=1
-# the local install.sh runs first, then each reachable peer is pulled and
-# its install.sh runs. HEAD convergence is verified after each pull.
+# _distribute_one <repo> <install:0|1> <byobu:0|1>
+# Orchestrator entry point. Runs the local install.sh, then does the
+# remote work. Two modes:
+#
+#   byobu=0 (default): detached tmux worker per node, no visible output
+#                      from the remote command; results reported at end.
+#   byobu=1 (-b/--bb): one visible tmux session with a horizontal pane
+#                      per node (even-horizontal layout). Each pane runs
+#                      the worker in foreground; the user sees live output
+#                      from every node. Exit the viewer with Ctrl-b d.
+#
+# In both modes the work happens on each node's CPU; the local process
+# only orchestrates.
 _distribute_one() {
-    _repo="$1" _do_install="$2"
+    _repo="$1" _do_install="$2" _byobu="${3:-0}"
     _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
 
+    # Quiet mode follows --no-bb only. It does NOT depend on TTY state
+    # or on whether the stream is being captured by another tool: the
+    # visible mode is the default behavior, silence is an explicit
+    # choice the user makes with --no-bb.
+    _quiet=0
+    if [ "$_byobu" = "0" ]; then
+        _quiet=1
+    fi
+
     if [ "$_do_install" = "1" ]; then
         if [ -f "$_target/install.sh" ]; then
-            info "cmd: bash \"$_target/install.sh\""
-            info "running install.sh on local..."
-            bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
-            ok "local install complete"
+            if [ "$_quiet" = "1" ]; then
+                _local_log="$HOME/.local/share/ut/distribute/$_repo-local.log"
+                mkdir -p "$(dirname "$_local_log")"
+                if ! bash "$_target/install.sh" > "$_local_log" 2>&1; then
+                    err "$_repo  local install.sh failed (log: $_local_log)"
+                    return 1
+                fi
+            else
+                info "cmd: bash \"$_target/install.sh\""
+                info "running install.sh on local..."
+                bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
+                ok "local install complete"
+            fi
         else
             warn "no install.sh for $_repo, skipping local install"
         fi
@@ -262,58 +289,229 @@ _distribute_one() {
 
     _devices="$(_nodes_db)"
     [ -f "$_devices" ] || die "device table not found: $_devices"
-    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
-    # remote git pull can drain the here-string, silently truncating
-    # the loop after the first non-local node. Explicit fd separates
-    # the loop's input from the commands it runs.
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        warn "tmux not found - falling back to sequential distribution"
+        _distribute_one_sequential "$_repo" "$_do_install"
+        return $?
+    fi
+
+    _log_dir="$HOME/.local/share/ut/distribute"
+    mkdir -p "$_log_dir"
+    _ut_bin="$(command -v ut)"
+
+    # Collect remote aliases first so both modes share the same loop body.
+    _aliases=()
     while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _dblk="$(blockdb_get "$_devices" alias "$alias")"
         [ -n "$_dblk" ] || continue
         ip="$(blockdb_field "$_dblk" ip)"
-        user="$(blockdb_field "$_dblk" user)"
-        port="$(blockdb_field "$_dblk" port)"
         is_local_ip "$ip" && continue
-        _port="${port:-22}"
-        if ! _wait_reachable "$ip" "$_port"; then
-            warn "$alias — skipped (unreachable: $ip:$_port)"
-            continue
-        fi
-        # Resolve the repo path on the remote. Updates remote ut first so
-        # `ut path` exists there. Empty result means the repo isn't cloned
-        # yet on that node.
-        _rpath="$(_remote_repo_path "$alias" "$_repo")"
-        if [ -z "$_rpath" ]; then
-            info "cmd: nssh \"$alias\" \"ut install $_repo\""
-            info "$alias — $_repo not resolved remotely, installing..."
-            if ! nssh "$alias" "ut install $_repo" 2>/dev/null; then
-                warn "$alias — $_repo auto-install failed, skipping"
-                continue
-            fi
-            _rpath="$(_remote_repo_path "$alias" "$_repo")"
-            if [ -z "$_rpath" ]; then
-                warn "$alias — ut still cannot resolve path after install, skipping"
-                continue
-            fi
-        fi
-        _local_head="$(git -C "$_target" rev-parse HEAD 2>/dev/null || printf '')"
-        info "cmd: nssh \"$alias\" \"git -C $_rpath pull --rebase origin main\""
-        info "distributing $_repo -> $alias (path $_rpath)..."
-        nssh "$alias" "git -C $_rpath pull --rebase origin main" || { err "$alias — distribution failed"; continue; }
-        _remote_head="$(nssh "$alias" "git -C $_rpath rev-parse HEAD" 2>/dev/null || printf '')"
-        if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
-            err "$alias — HEAD divergence after distribute (local=$_local_head remote=${_remote_head:-?})"
-            continue
-        fi
-        ok "$alias — $_repo updated (HEAD $_remote_head)"
-        log_change "$_repo" "distribute:$alias"
-        if [ "$_do_install" = "1" ]; then
-            _distribute_install_remote "$_repo" "$alias" || continue
-            log_change "$_repo" "install:$alias"
-        fi
+        _aliases+=("$alias")
     done 3< <(_all_nodes_aliases)
+
+    if [ "${#_aliases[@]}" -eq 0 ]; then
+        info "no remote nodes to distribute to"
+        if [ "$_do_install" = "1" ]; then
+            log_change "$_repo" "install"
+        fi
+        return 0
+    fi
+
+    if [ "$_byobu" = "1" ]; then
+        _distribute_one_byobu "$_repo" "$_do_install" "$_log_dir" "$_ut_bin" "${_aliases[@]}"
+        return $?
+    fi
+
+    # Detached mode: launch one session per node, then wait.
+    for alias in "${_aliases[@]}"; do
+        _session="ut-dist-$_repo-$alias"
+        _log="$_log_dir/$_repo-$alias.log"
+        _rc="$_log_dir/$_repo-$alias.rc"
+        tmux kill-session -t "$_session" 2>/dev/null || true
+        rm -f "$_rc"
+        tmux new-session -d -s "$_session" \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
+        if [ "$_quiet" = "0" ]; then
+            info "launched: $_session"
+            info "          attach: tmux attach -t $_session"
+            info "          log:    $_log"
+        fi
+    done
+
+    for _a in "${_aliases[@]}"; do
+        _session="ut-dist-$_repo-$_a"
+        while tmux has-session -t "$_session" 2>/dev/null; do
+            sleep 1
+        done
+    done
+
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "${_aliases[@]}"
+    return $?
+}
+
+# _distribute_one_byobu <repo> <do_install> <log_dir> <ut_bin> <alias...>
+# Visible mode. Builds one tmux session "ut-view-<repo>" with a pane per
+# alias in even-horizontal layout. Each pane runs the worker in
+# foreground; on exit it writes its rc to <log_dir>/<repo>-<alias>.rc and
+# signals "ut-done-<repo>-<alias>" with tmux wait-for. The viewer is
+# attached in the foreground; the user exits with Ctrl-b d. Afterwards
+# the orchestrator waits for every signal and reports.
+_distribute_one_byobu() {
+    _repo="$1" _do_install="$2" _log_dir="$3" _ut_bin="$4"
+    shift 4
+    _aliases=("$@")
+
+    _view="ut-view-$_repo"
+    tmux kill-session -t "$_view" 2>/dev/null || true
+    for _a in "${_aliases[@]}"; do
+        tmux kill-session -t "ut-dist-$_repo-$_a" 2>/dev/null || true
+        rm -f "$_log_dir/$_repo-$_a.rc"
+    done
+
+    _first="${_aliases[0]}"
+    _log0="$_log_dir/$_repo-$_first.log"
+    _rc0="$_log_dir/$_repo-$_first.rc"
+
+    # Pane 0: the first alias. The inner shell runs the worker with its
+    # stdout/stderr captured by tee to the log AND shown live in the pane,
+    # then writes the worker's exit code to the rc file. The rc file is
+    # the synchronization primitive: the orchestrator polls it below.
+    tmux new-session -d -s "$_view" -n workers \
+        "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$_first\" \"$_do_install\" 2>&1 | tee \"$_log0\"; echo \${PIPESTATUS[0]} > \"$_rc0\"'"
+
+    # Remaining aliases: split-window -h creates horizontal panes (side by
+    # side). even-horizontal is applied at the end so widths are equal.
+    for alias in "${_aliases[@]:1}"; do
+        _log="$_log_dir/$_repo-$alias.log"
+        _rc="$_log_dir/$_repo-$alias.rc"
+        tmux split-window -h -t "$_view:workers" \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" 2>&1 | tee \"$_log\"; echo \${PIPESTATUS[0]} > \"$_rc\"'"
+    done
+    tmux select-layout -t "$_view:workers" even-horizontal
+
+    # Attach whenever stdout is a terminal. No other tool's environment
+    # variable changes this decision: visible mode is the default.
+    if [ -t 1 ]; then
+        info "viewer session: $_view (panes: ${#_aliases[@]})"
+        info "  exit viewer:  Ctrl-b d   (workers keep running)"
+        info "  attach later: tmux attach -t $_view"
+        tmux attach -t "$_view" || true
+    fi
+
+    # Wait for every worker to finish. Poll the rc file instead of using
+    # tmux wait-for: wait-for does not queue signals, so a worker that
+    # finished before the wait started would leave the orchestrator
+    # blocked forever. Polling the rc file is order-independent.
+    for _a in "${_aliases[@]}"; do
+        _rc_file="$_log_dir/$_repo-$_a.rc"
+        while [ ! -f "$_rc_file" ]; do
+            sleep 1
+        done
+    done
+
+    # The viewer session is left alive so the user can re-attach and
+    # inspect scrollback. Cleanup is the user's call (tmux kill-session).
+
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "${_aliases[@]}"
+    return $?
+}
+
+# _distribute_one_report <repo> <do_install> <log_dir> <alias...>
+# Reads every rc file and prints a per-node ok/failed line. Shared by both
+# modes. Returns 1 if any node reported non-zero.
+_distribute_one_report() {
+    _repo="$1" _do_install="$2" _log_dir="$3"
+    shift 3
+    _failed=0
+    for _a in "$@"; do
+        _rc_file="$_log_dir/$_repo-$_a.rc"
+        _log_file="$_log_dir/$_repo-$_a.log"
+        if [ -f "$_rc_file" ] && [ "$(cat "$_rc_file" 2>/dev/null)" = "0" ]; then
+            ok "$_a - done (log: $_log_file)"
+            log_change "$_repo" "distribute:$_a"
+            if [ "$_do_install" = "1" ]; then
+                log_change "$_repo" "install:$_a"
+            fi
+        else
+            err "$_a - failed (log: $_log_file)"
+            _failed=1
+        fi
+    done
     if [ "$_do_install" = "1" ]; then
         log_change "$_repo" "install"
+    fi
+    return $_failed
+}
+
+# _distribute_one_sequential <repo> <do_install> -- fallback used when
+# tmux is not available. Same work as the parallel version, one node at a
+# time, in the current shell.
+_distribute_one_sequential() {
+    _repo="$1" _do_install="$2"
+    _devices="$(_nodes_db)"
+    [ -f "$_devices" ] || die "device table not found: $_devices"
+    while IFS= read -r alias <&3; do
+        [ -z "$alias" ] && continue
+        _dblk="$(blockdb_get "$_devices" alias "$alias")"
+        [ -n "$_dblk" ] || continue
+        ip="$(blockdb_field "$_dblk" ip)"
+        is_local_ip "$ip" && continue
+        _distribute_one_remote "$_repo" "$alias" "$_do_install" || true
+    done 3< <(_all_nodes_aliases)
+    return 0
+}
+
+# _distribute_one_remote <repo> <alias> <do_install> -- the worker for a
+# single node. Runs inside its own tmux session (or inline when tmux is
+# missing). Pulls the repo on the remote, verifies HEAD convergence, and
+# runs install.sh there when requested.
+_distribute_one_remote() {
+    _repo="$1" _alias="$2" _do_install="$3"
+    printf '=== %s on %s start at %s ===\n' "$_repo" "$_alias" "$(date '+%H:%M:%S')"
+    _target="$(repo_dir "$_repo")"
+    _devices="$(_nodes_db)"
+    _dblk="$(blockdb_get "$_devices" alias "$_alias")"
+    [ -n "$_dblk" ] || { err "$_alias - no block in device table"; return 1; }
+    ip="$(blockdb_field "$_dblk" ip)"
+    port="$(blockdb_field "$_dblk" port)"
+    _port="${port:-22}"
+
+    if ! _wait_reachable "$ip" "$_port"; then
+        err "$_alias - unreachable: $ip:$_port"
+        return 1
+    fi
+
+    _rpath="$(_remote_repo_path "$_alias" "$_repo")"
+    if [ -z "$_rpath" ]; then
+        info "$_alias - $_repo not resolved remotely, installing..."
+        if ! nssh "$_alias" "ut install $_repo"; then
+            err "$_alias - $_repo auto-install failed"
+            return 1
+        fi
+        _rpath="$(_remote_repo_path "$_alias" "$_repo")"
+        if [ -z "$_rpath" ]; then
+            err "$_alias - ut cannot resolve path after install"
+            return 1
+        fi
+    fi
+
+    _local_head="$(git -C "$_target" rev-parse HEAD 2>/dev/null || printf '')"
+    info "$_alias - pulling $_repo (path $_rpath)..."
+    if ! nssh "$_alias" "git -C $_rpath pull --rebase origin main"; then
+        err "$_alias - pull failed"
+        return 1
+    fi
+    _remote_head="$(nssh "$_alias" "git -C $_rpath rev-parse HEAD" 2>/dev/null || printf '')"
+    if [ -n "$_local_head" ] && [ "$_remote_head" != "$_local_head" ]; then
+        err "$_alias - HEAD divergence (local=$_local_head remote=${_remote_head:-?})"
+        return 1
+    fi
+    ok "$_alias - $_repo updated (HEAD $_remote_head)"
+
+    if [ "$_do_install" = "1" ]; then
+        _distribute_install_remote "$_repo" "$_alias" || return 1
     fi
     return 0
 }
@@ -338,14 +536,19 @@ _local_repo_names() {
 
 cmd_distribute() {
     _install=0
-    case "${1:-}" in
-        --install|-i) _install=1; shift ;;
-    esac
+    _byobu=1
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --install|-i) _install=1; shift ;;
+            --no-bb)      _byobu=0;   shift ;;
+            *)            break ;;
+        esac
+    done
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute [--install] <repo|all>"
+    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--no-bb] <repo|all>"
 
     if [ "$_repo" != "all" ]; then
-        _distribute_one "$_repo" "$_install" || return 1
+        _distribute_one "$_repo" "$_install" "$_byobu" || return 1
         ok "distribute complete"
         return 0
     fi
@@ -365,7 +568,7 @@ cmd_distribute() {
         else
             info "cmd: ut distribute $_r"
         fi
-        _distribute_one "$_r" "$_install" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
+        _distribute_one "$_r" "$_install" "$_byobu" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
     done
     rm -f "$_corelist"
     _nok=$(wc -l < "$_ok" | tr -d ' '); _nskip=$(wc -l < "$_skipped" | tr -d ' ')

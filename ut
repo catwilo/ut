@@ -93,6 +93,7 @@ print_help() {
   printf "  ut machines                  -- ping a todos los nodos registrados\n"
   printf "  ut machines diff             -- compara el estado de repos entre nodos\n"
   printf "  ut distribute <repo>         -- copia el repo a los nodos remotos\n"
+  printf "  ut distribute --no-bb <repo> -- sin paneles (salida limpia, ideal para pipes)\n"
   printf "  ut distribute <repo>         -- pull a los nodos remotos\n"
   printf "  ut distribute --install <repo>  -- pull + install.sh local y remoto\n"
   printf "                                  (si el repo no tiene install.sh,\n"
@@ -143,5 +144,15 @@ case "$CMD" in
     ship)       cmd_ship       "$@" ;;
     branch)     cmd_branch     "$@" ;;
     distribute) cmd_distribute "$@" ;;
+    # Internal: invoked by tmux sessions launched from _distribute_one.
+    # Not part of the public interface; hidden from help. Runs the
+    # worker for one remote node in its own session.
+    _distribute-one)
+        _repo="${1:-}"; _alias="${2:-}"; _do_install="${3:-0}"
+        if [ -z "$_repo" ] || [ -z "$_alias" ]; then
+            err "_distribute-one requires <repo> <alias> [do_install]"
+        fi
+        _distribute_one_remote "$_repo" "$_alias" "$_do_install"
+        ;;
     *) err "unknown command: $CMD"; print_help; exit 1 ;;
 esac
