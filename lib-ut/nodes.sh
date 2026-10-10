@@ -68,7 +68,11 @@ cmd_machines_diff() {
     mkdir -p "$HOME/tmp"; _out="$HOME/tmp/utdiff"; rm -rf "$_out"; mkdir -p "$_out"
     _nodes="local"
     sh "$_collect" > "$_out/local" 2>/dev/null
-    while IFS= read -r alias; do
+    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
+    # remote git pull can drain the here-string, silently truncating
+    # the loop after the first non-local node. Explicit fd separates
+    # the loop's input from the commands it runs.
+    while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _mdblk="$(blockdb_get "$_devices" alias "$alias")"
         [ -n "$_mdblk" ] || continue
@@ -80,7 +84,7 @@ cmd_machines_diff() {
             : > "$_out/$alias"; printf 'UNREACH\n' > "$_out/$alias.flag"
             _nodes="$_nodes $alias"
         fi
-    done <<< "$(_all_nodes_aliases)"
+    done 3< <(_all_nodes_aliases)
 
     # ------------------------------------------------------------------
     # Only out-of-sync repos are printed; a repo identical on every node is
@@ -185,7 +189,11 @@ cmd_machines() {
     _hosts="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/hosts.db"
     [ -f "$_devices" ] || die "device table not found: $_devices"
     [ -f "$_hosts" ]   || die "hosts.db not found: $_hosts"
-    while IFS= read -r alias; do
+    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
+    # remote git pull can drain the here-string, silently truncating
+    # the loop after the first non-local node. Explicit fd separates
+    # the loop's input from the commands it runs.
+    while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _mblk="$(blockdb_get "$_devices" alias "$alias")"
         [ -n "$_mblk" ] || continue
@@ -198,7 +206,7 @@ cmd_machines() {
         else
             err "$alias — unreachable"
         fi
-    done <<< "$(_all_nodes_aliases)"
+    done 3< <(_all_nodes_aliases)
 }
 
 # _remote_repo_path <alias> <repo> -- path to the repo on the remote node.
@@ -254,7 +262,11 @@ _distribute_one() {
 
     _devices="$(_nodes_db)"
     [ -f "$_devices" ] || die "device table not found: $_devices"
-    while IFS= read -r alias; do
+    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
+    # remote git pull can drain the here-string, silently truncating
+    # the loop after the first non-local node. Explicit fd separates
+    # the loop's input from the commands it runs.
+    while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _dblk="$(blockdb_get "$_devices" alias "$alias")"
         [ -n "$_dblk" ] || continue
@@ -299,7 +311,7 @@ _distribute_one() {
             _distribute_install_remote "$_repo" "$alias" || continue
             log_change "$_repo" "install:$alias"
         fi
-    done <<< "$(_all_nodes_aliases)"
+    done 3< <(_all_nodes_aliases)
     if [ "$_do_install" = "1" ]; then
         log_change "$_repo" "install"
     fi

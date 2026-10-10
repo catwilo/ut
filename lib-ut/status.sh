@@ -59,7 +59,10 @@ cmd_status() {
         _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
         if [ -f "$_devices" ]; then
             . "${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/core/blockdb.sh" 2>/dev/null || true
-            while IFS= read -r alias; do
+            # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and
+            # the remote command can drain the here-string, silently
+            # truncating the loop after the first non-local node.
+            while IFS= read -r alias <&3; do
                 [ -z "$alias" ] && continue
                 _mdblk="$(blockdb_get "$_devices" alias "$alias" 2>/dev/null)"
                 [ -n "$_mdblk" ] || continue
@@ -71,7 +74,7 @@ cmd_status() {
                 else
                     : > "$_snap_dir/$repo/$alias.unreach"
                 fi
-            done <<< "$(_devices_aliases "$_devices" 2>/dev/null)"
+            done 3< <(_devices_aliases "$_devices" 2>/dev/null)
         fi
         _state=$(repo_state "$target")
         _br=$(echo "$_state" | awk "{print \$1}")

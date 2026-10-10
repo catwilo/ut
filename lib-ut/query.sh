@@ -15,7 +15,13 @@ repo_dir() {
     _rd_repo="$1"
     [ -z "$_rd_repo" ] && { err "repo_dir: empty repo"; return 1; }
     _rd_path=$(awk -F'\t' -v r="$_rd_repo" '$1==r {print $6; exit}' "$TSV")
-    if [ -n "$_rd_path" ]; then
+    # The path column is written on the machine that first registered the
+    # repo. repos.tsv travels by git to every node, so on a different
+    # platform (Termux absolute paths carried to Debian) that stored path
+    # does not exist. When the stored path is stale, fall back to the
+    # standard location under $DST. The repo name is the identity; the
+    # path is a hint.
+    if [ -n "$_rd_path" ] && [ -d "$_rd_path" ]; then
         printf '%s\n' "$_rd_path"
     else
         printf '%s\n' "$DST/$_rd_repo"

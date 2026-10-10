@@ -97,7 +97,7 @@ cmd_new() {
         _url="$(repo_url "$_repo")"
         nssh "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo" 2>/dev/null \
             && ok "$_alias -- $_repo cloned" || err "$_alias -- clone failed"
-    done <<< "$(_all_nodes_aliases)"
+    done 3< <(_all_nodes_aliases)
     ok "$_repo distributed to all nodes"
 }
 
@@ -193,5 +193,5 @@ _rename_propagate() {
         _url="$(repo_url "$_rp_new")"
         nssh "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url" 2>/dev/null \
             && ok "$_rp_alias — renamed" || warn "$_rp_alias — rename propagation failed"
-    done <<< "$(_all_nodes_aliases)"
+    done 3< <(_all_nodes_aliases)
 }
