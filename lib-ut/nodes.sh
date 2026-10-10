@@ -53,6 +53,12 @@ _all_nodes_aliases() {
 
 _wait_reachable() {
     _ip="$1" _p="$2"
+    # nc is the fast path when present. When it is not, do not fail the
+    # node: fall through to ssh, whose ConnectTimeout is the only
+    # authoritative source of "reachable" without nc.
+    if ! command -v nc >/dev/null 2>&1; then
+        return 0
+    fi
     nc -z -w5 "$_ip" "$_p" >/dev/null 2>&1 && return 0
     sleep 2
     nc -z -w5 "$_ip" "$_p" >/dev/null 2>&1
@@ -254,34 +260,19 @@ _distribute_install_remote() {
 # In both modes the work happens on each node's CPU; the local process
 # only orchestrates.
 _distribute_one() {
-    _repo="$1" _do_install="$2" _byobu="${3:-0}"
+    _repo="$1" _do_install="$2" _mode="${3:-panes}" _sig_dir="$4"
+    case "$_do_install" in 0|1) ;; *) die "_do_install must be 0 or 1, got: $_do_install" ;; esac
+    case "$_mode" in panes|mix) ;; *) die "_mode must be panes or mix, got: $_mode" ;; esac
+    [ -n "$_sig_dir" ] && [ -d "$_sig_dir" ] || die "_sig_dir missing or not a directory"
     _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
 
-    # Quiet mode follows --no-bb only. It does NOT depend on TTY state
-    # or on whether the stream is being captured by another tool: the
-    # visible mode is the default behavior, silence is an explicit
-    # choice the user makes with --no-bb.
-    _quiet=0
-    if [ "$_byobu" = "0" ]; then
-        _quiet=1
-    fi
-
     if [ "$_do_install" = "1" ]; then
         if [ -f "$_target/install.sh" ]; then
-            if [ "$_quiet" = "1" ]; then
-                _local_log="$HOME/.local/share/ut/distribute/$_repo-local.log"
-                mkdir -p "$(dirname "$_local_log")"
-                if ! bash "$_target/install.sh" > "$_local_log" 2>&1; then
-                    err "$_repo  local install.sh failed (log: $_local_log)"
-                    return 1
-                fi
-            else
-                info "cmd: bash \"$_target/install.sh\""
-                info "running install.sh on local..."
-                bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
-                ok "local install complete"
-            fi
+            info "cmd: bash \"$_target/install.sh\""
+            info "running install.sh on local..."
+            bash "$_target/install.sh" || { err "$_repo  local install.sh failed"; return 1; }
+            ok "local install complete"
         else
             warn "no install.sh for $_repo, skipping local install"
         fi
@@ -298,7 +289,14 @@ _distribute_one() {
 
     _log_dir="$HOME/.local/share/ut/distribute"
     mkdir -p "$_log_dir"
+    # Purge logs older than 7 days; keeps the directory bounded without a
+    # full rotation system. Non-fatal on failure, but the reason is
+    # printed: a permission problem on the log dir is worth knowing.
+    if ! find "$_log_dir" -type f -mtime +7 -delete; then
+        warn "could not purge old distribute logs under $_log_dir (reason above)"
+    fi
     _ut_bin="$(command -v ut)"
+    [ -n "$_ut_bin" ] || die "ut not found in PATH"
 
     # Collect remote aliases first so both modes share the same loop body.
     _aliases=()
@@ -319,114 +317,219 @@ _distribute_one() {
         return 0
     fi
 
-    if [ "$_byobu" = "1" ]; then
-        _distribute_one_byobu "$_repo" "$_do_install" "$_log_dir" "$_ut_bin" "${_aliases[@]}"
+    case "$_mode" in
+        mix)
+            _distribute_one_mix "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "$_ut_bin" "${_aliases[@]}"
+            ;;
+        panes|*)
+            _distribute_one_panes "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "$_ut_bin" "${_aliases[@]}"
+            ;;
+    esac
+    return $?
+}
+
+# _distribute_one_mix <repo> <do_install> <log_dir> <sig_dir> <ut_bin> <alias...>
+# Parallel mode with interleaved output. Every alias runs in its own
+# background subshell; its stdout/stderr is piped through a per-line
+# prefixer that writes "[alias] <line>" (with a deterministic colour
+# when stdout is a terminal). Lines from different aliases arrive in
+# whatever order the workers produce them; the tag identifies the origin.
+# The exit code of each worker is captured from PIPESTATUS before the
+# pipeline's subshell exits and written to <sig_dir>/<alias>.rc.
+_distribute_one_mix() {
+    _repo="$1" _do_install="$2" _log_dir="$3" _sig_dir="$4" _ut_bin="$5"
+    shift 5
+    _aliases=("$@")
+
+    # Palette and reset are resolved here, not at module load: a library
+    # sourced once at startup cannot know whether the eventual command's
+    # stdout is a terminal. The decision is per invocation.
+    _palette=(36 35 32 33 34 31)
+    if [ -t 1 ]; then
+        _reset=$'\033[0m'
+    else
+        _reset=""
+    fi
+
+    _pids=()
+    _idx=0
+    for alias in "${_aliases[@]}"; do
+        _log="$_log_dir/$_repo-$alias.log"
+        _rc="$_sig_dir/$alias.rc"
+
+        # Colour assigned by position in the list: first alias gets the
+        # first palette entry, second the second, and so on. Cycle when
+        # the list outgrows the palette. Automatic: no per-node config.
+        if [ -n "$_reset" ]; then
+            _color=$(printf '\033[%sm' "${_palette[$(( _idx % ${#_palette[@]} ))]}")
+        else
+            _color=""
+        fi
+        _idx=$(( _idx + 1 ))
+
+        (
+            "$_ut_bin" _distribute-one "$_repo" "$alias" "$_do_install" 2>&1 \
+            | while IFS= read -r _line; do
+                if [ -n "$_color" ]; then
+                    printf '%b[%s]%b %s\n' "$_color" "$alias" "$_reset" "$_line"
+                else
+                    printf '[%s] %s\n' "$alias" "$_line"
+                fi
+            done
+            printf '%s\n' "${PIPESTATUS[0]}" > "$_rc"
+        ) | tee "$_log" &
+
+        _pids+=("$!")
+    done
+
+    for _p in "${_pids[@]}"; do
+        wait "$_p" || true
+    done
+
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+    return $?
+}
+
+# _distribute_one_panes <repo> <do_install> <log_dir> <sig_dir> <ut_bin> <alias...>
+# Visible mode. Two contexts:
+#
+#   1. Inside the user's tmux ($TMUX set): a NEW WINDOW named ut-workers
+#      is created in the current session and split into one pane per
+#      alias (even-horizontal). The user's current window is untouched.
+#      tmux switches to the new window automatically, so the user sees
+#      the panes without doing anything. remain-on-exit keeps the panes
+#      open after workers finish so scrollback is readable.
+#
+#   2. Outside tmux, real TTY, no capture wrapper: create a new detached
+#      session ut-view-<repo> and attach it in the foreground. tmux attach
+#      writes only to /dev/tty, so the attach cannot leak into any
+#      redirected stdout/stderr.
+#
+#   3. Outside tmux with UT_NO_ATTACH set or no TTY: silent mode. Only
+#      the final summary reaches stdout; worker sessions are detached.
+_distribute_one_panes() {
+    _repo="$1" _do_install="$2" _log_dir="$3" _sig_dir="$4" _ut_bin="$5"
+    shift 5
+    _aliases=("$@")
+
+    # Case 1: inside the user's tmux. Create a new window in the current
+    # session so the user's current window/layout is not disturbed.
+    if [ -n "${TMUX:-}" ]; then
+        _win="ut-workers"
+        # Kill any previous window with the same name to start clean.
+        tmux kill-window -t "$_win" 2>/dev/null || true
+
+        _first="${_aliases[0]}"
+        _log0="$_log_dir/$_repo-$_first.log"
+        _rc0="$_sig_dir/$_first.rc"
+
+        tmux new-window -n "$_win" \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$_first\" \"$_do_install\" 2>&1 | tee \"$_log0\"; echo \${PIPESTATUS[0]} > \"$_rc0\"'"
+
+        for alias in "${_aliases[@]:1}"; do
+            _log="$_log_dir/$_repo-$alias.log"
+            _rc="$_sig_dir/$alias.rc"
+            tmux split-window -h -t "$_win" \
+                "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" 2>&1 | tee \"$_log\"; echo \${PIPESTATUS[0]} > \"$_rc\"'"
+        done
+        tmux select-layout -t "$_win" even-horizontal
+        # Keep panes readable after workers exit.
+        tmux set-option -w -t "$_win" remain-on-exit on
+
+        _wait_for_workers "$_sig_dir" "${_aliases[@]}"
+        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
         return $?
     fi
 
-    # Detached mode: launch one session per node, then wait.
-    for alias in "${_aliases[@]}"; do
-        _session="ut-dist-$_repo-$alias"
-        _log="$_log_dir/$_repo-$alias.log"
-        _rc="$_log_dir/$_repo-$alias.rc"
-        tmux kill-session -t "$_session" 2>/dev/null || true
-        rm -f "$_rc"
-        tmux new-session -d -s "$_session" \
-            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
-        if [ "$_quiet" = "0" ]; then
-            info "launched: $_session"
-            info "          attach: tmux attach -t $_session"
-            info "          log:    $_log"
-        fi
-    done
+    # Cases 2 and 3: outside tmux.
+    if [ -z "${UT_NO_ATTACH:-}" ] && [ -t 1 ]; then
+        _view="ut-view-$_repo"
+        tmux kill-session -t "$_view" 2>/dev/null || true
 
-    for _a in "${_aliases[@]}"; do
-        _session="ut-dist-$_repo-$_a"
-        while tmux has-session -t "$_session" 2>/dev/null; do
-            sleep 1
+        _first="${_aliases[0]}"
+        _log0="$_log_dir/$_repo-$_first.log"
+        _rc0="$_sig_dir/$_first.rc"
+
+        tmux new-session -d -s "$_view" -n workers \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$_first\" \"$_do_install\" 2>&1 | tee \"$_log0\"; echo \${PIPESTATUS[0]} > \"$_rc0\"'"
+
+        for alias in "${_aliases[@]:1}"; do
+            _log="$_log_dir/$_repo-$alias.log"
+            _rc="$_sig_dir/$alias.rc"
+            tmux split-window -h -t "$_view:workers" \
+                "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" 2>&1 | tee \"$_log\"; echo \${PIPESTATUS[0]} > \"$_rc\"'"
         done
-    done
+        tmux select-layout -t "$_view:workers" even-horizontal
+        tmux set-option -w -t "$_view:workers" remain-on-exit on
 
-    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "${_aliases[@]}"
-    return $?
-}
-
-# _distribute_one_byobu <repo> <do_install> <log_dir> <ut_bin> <alias...>
-# Visible mode. Builds one tmux session "ut-view-<repo>" with a pane per
-# alias in even-horizontal layout. Each pane runs the worker in
-# foreground; on exit it writes its rc to <log_dir>/<repo>-<alias>.rc and
-# signals "ut-done-<repo>-<alias>" with tmux wait-for. The viewer is
-# attached in the foreground; the user exits with Ctrl-b d. Afterwards
-# the orchestrator waits for every signal and reports.
-_distribute_one_byobu() {
-    _repo="$1" _do_install="$2" _log_dir="$3" _ut_bin="$4"
-    shift 4
-    _aliases=("$@")
-
-    _view="ut-view-$_repo"
-    tmux kill-session -t "$_view" 2>/dev/null || true
-    for _a in "${_aliases[@]}"; do
-        tmux kill-session -t "ut-dist-$_repo-$_a" 2>/dev/null || true
-        rm -f "$_log_dir/$_repo-$_a.rc"
-    done
-
-    _first="${_aliases[0]}"
-    _log0="$_log_dir/$_repo-$_first.log"
-    _rc0="$_log_dir/$_repo-$_first.rc"
-
-    # Pane 0: the first alias. The inner shell runs the worker with its
-    # stdout/stderr captured by tee to the log AND shown live in the pane,
-    # then writes the worker's exit code to the rc file. The rc file is
-    # the synchronization primitive: the orchestrator polls it below.
-    tmux new-session -d -s "$_view" -n workers \
-        "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$_first\" \"$_do_install\" 2>&1 | tee \"$_log0\"; echo \${PIPESTATUS[0]} > \"$_rc0\"'"
-
-    # Remaining aliases: split-window -h creates horizontal panes (side by
-    # side). even-horizontal is applied at the end so widths are equal.
-    for alias in "${_aliases[@]:1}"; do
-        _log="$_log_dir/$_repo-$alias.log"
-        _rc="$_log_dir/$_repo-$alias.rc"
-        tmux split-window -h -t "$_view:workers" \
-            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" 2>&1 | tee \"$_log\"; echo \${PIPESTATUS[0]} > \"$_rc\"'"
-    done
-    tmux select-layout -t "$_view:workers" even-horizontal
-
-    # Attach whenever stdout is a terminal. No other tool's environment
-    # variable changes this decision: visible mode is the default.
-    if [ -t 1 ]; then
         info "viewer session: $_view (panes: ${#_aliases[@]})"
         info "  exit viewer:  Ctrl-b d   (workers keep running)"
         info "  attach later: tmux attach -t $_view"
-        tmux attach -t "$_view" || true
+        # Let tmux use its default fds (the caller's stdin/stdout/stderr).
+        # An explicit `</dev/tty >/dev/tty` breaks on Termux: the client
+        # cannot open the controlling terminal through an explicit path
+        # ("open terminal failed: can't use /dev/tty"). Without the
+        # redirection the client inherits the pty it was launched from.
+        if ! tmux attach -t "$_view"; then
+            warn "tmux attach failed; workers keep running in session $_view"
+            warn "  re-attach with: tmux attach -t $_view"
+        fi
+
+        _wait_for_workers "$_sig_dir" "${_aliases[@]}"
+        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+        return $?
     fi
 
-    # Wait for every worker to finish. Poll the rc file instead of using
-    # tmux wait-for: wait-for does not queue signals, so a worker that
-    # finished before the wait started would leave the orchestrator
-    # blocked forever. Polling the rc file is order-independent.
-    for _a in "${_aliases[@]}"; do
-        _rc_file="$_log_dir/$_repo-$_a.rc"
-        while [ ! -f "$_rc_file" ]; do
-            sleep 1
-        done
+    # Case 3: silent mode. Run workers detached in individual sessions,
+    # wait, report. No attach is attempted, no viewer session is created.
+    for alias in "${_aliases[@]}"; do
+        _session="ut-dist-$_repo-$alias"
+        _log="$_log_dir/$_repo-$alias.log"
+        _rc="$_sig_dir/$alias.rc"
+        tmux kill-session -t "$_session" 2>/dev/null || true
+        tmux new-session -d -s "$_session" \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
     done
 
-    # The viewer session is left alive so the user can re-attach and
-    # inspect scrollback. Cleanup is the user's call (tmux kill-session).
-
-    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "${_aliases[@]}"
+    _wait_for_workers "$_sig_dir" "${_aliases[@]}"
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
     return $?
 }
 
-# _distribute_one_report <repo> <do_install> <log_dir> <alias...>
-# Reads every rc file and prints a per-node ok/failed line. Shared by both
+# _wait_for_workers <sig_dir> <alias...>
+# Polls <sig_dir>/<alias>.rc until every alias has one, or until
+# UT_DISTRIBUTE_MAX_WAIT seconds have elapsed (default 3600). Timeout is
+# reported as a failure; a node that never finishes is not silently
+# treated as success.
+_wait_for_workers() {
+    _sig_dir="$1"
+    shift
+    _max_wait="${UT_DISTRIBUTE_MAX_WAIT:-3600}"
+    _elapsed=0
+    while :; do
+        _pending=0
+        for _a in "$@"; do
+            [ -f "$_sig_dir/$_a.rc" ] || _pending=$(( _pending + 1 ))
+        done
+        [ "$_pending" -eq 0 ] && return 0
+        if [ "$_elapsed" -ge "$_max_wait" ]; then
+            err "timeout after ${_max_wait}s waiting for: $_pending worker(s)"
+            return 1
+        fi
+        sleep 2
+        _elapsed=$(( _elapsed + 2 ))
+    done
+}
+
+# _distribute_one_report <repo> <do_install> <log_dir> <sig_dir> <alias...>
+# Reads every rc file and prints a per-node ok/failed line. Shared by all
 # modes. Returns 1 if any node reported non-zero.
 _distribute_one_report() {
-    _repo="$1" _do_install="$2" _log_dir="$3"
-    shift 3
+    _repo="$1" _do_install="$2" _log_dir="$3" _sig_dir="$4"
+    shift 4
     _failed=0
     for _a in "$@"; do
-        _rc_file="$_log_dir/$_repo-$_a.rc"
+        _rc_file="$_sig_dir/$_a.rc"
         _log_file="$_log_dir/$_repo-$_a.log"
         if [ -f "$_rc_file" ] && [ "$(cat "$_rc_file" 2>/dev/null)" = "0" ]; then
             ok "$_a - done (log: $_log_file)"
@@ -536,19 +639,27 @@ _local_repo_names() {
 
 cmd_distribute() {
     _install=0
-    _byobu=1
+    _mode="panes"
     while [ $# -gt 0 ]; do
         case "$1" in
             --install|-i) _install=1; shift ;;
-            --no-bb)      _byobu=0;   shift ;;
+            --mix)        _mode="mix"; shift ;;
             *)            break ;;
         esac
     done
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--no-bb] <repo|all>"
+    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--mix] <repo|all>"
+
+    # Signals directory: one per process, shared across every repo this
+    # invocation handles (`distribute all` calls _distribute_one N times).
+    # A single trap cleans it up on exit; workers write <sig_dir>/<alias>.rc
+    # and the orchestrator polls those files.
+    _sig_dir="$(mktemp -d "${TMPDIR:-/tmp}/ut-dist.XXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$_sig_dir'" EXIT
 
     if [ "$_repo" != "all" ]; then
-        _distribute_one "$_repo" "$_install" "$_byobu" || return 1
+        _distribute_one "$_repo" "$_install" "$_mode" "$_sig_dir" || return 1
         ok "distribute complete"
         return 0
     fi
@@ -558,7 +669,10 @@ cmd_distribute() {
     _skipped=$(mktemp); : > "$_skipped"
     _ok=$(mktemp); : > "$_ok"
     _corelist=$(mktemp); repos_for_target core | sort -u > "$_corelist"
-    _local_repo_names | while IFS= read -r _r; do
+    # Process substitution keeps the loop in the current shell: _sig_dir,
+    # the trap, and the exit code of _distribute_one all stay in scope.
+    # A `| while` would run the body in a subshell and lose that context.
+    while IFS= read -r _r <&3; do
         [ -z "$_r" ] && continue
         grep -qxF "$_r" "$_corelist" || continue
         _target="$(repo_dir "$_r")"
@@ -568,8 +682,8 @@ cmd_distribute() {
         else
             info "cmd: ut distribute $_r"
         fi
-        _distribute_one "$_r" "$_install" "$_byobu" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
-    done
+        _distribute_one "$_r" "$_install" "$_mode" "$_sig_dir" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
+    done 3< <(_local_repo_names)
     rm -f "$_corelist"
     _nok=$(wc -l < "$_ok" | tr -d ' '); _nskip=$(wc -l < "$_skipped" | tr -d ' ')
     rm -f "$_ok" "$_skipped"

@@ -93,7 +93,7 @@ print_help() {
   printf "  ut machines                  -- ping a todos los nodos registrados\n"
   printf "  ut machines diff             -- compara el estado de repos entre nodos\n"
   printf "  ut distribute <repo>         -- copia el repo a los nodos remotos\n"
-  printf "  ut distribute --no-bb <repo> -- sin paneles (salida limpia, ideal para pipes)\n"
+  printf "  ut distribute --mix <repo>   -- salida paralela con tag [alias] por linea\n"
   printf "  ut distribute <repo>         -- pull a los nodos remotos\n"
   printf "  ut distribute --install <repo>  -- pull + install.sh local y remoto\n"
   printf "                                  (si el repo no tiene install.sh,\n"
