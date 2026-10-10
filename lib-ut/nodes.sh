@@ -318,6 +318,9 @@ _distribute_one() {
     fi
 
     case "$_mode" in
+        quiet)
+            _distribute_one_quiet "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "$_ut_bin" "${_aliases[@]}"
+            ;;
         mix)
             _distribute_one_mix "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "$_ut_bin" "${_aliases[@]}"
             ;;
@@ -356,6 +359,7 @@ _distribute_one_mix() {
     for alias in "${_aliases[@]}"; do
         _log="$_log_dir/$_repo-$alias.log"
         _rc="$_sig_dir/$alias.rc"
+        : > "$_log"
 
         # Colour assigned by position in the list: first alias gets the
         # first palette entry, second the second, and so on. Cycle when
@@ -367,17 +371,33 @@ _distribute_one_mix() {
         fi
         _idx=$(( _idx + 1 ))
 
-        (
-            "$_ut_bin" _distribute-one "$_repo" "$alias" "$_do_install" 2>&1 \
-            | while IFS= read -r _line; do
-                if [ -n "$_color" ]; then
-                    printf '%b[%s]%b %s\n' "$_color" "$alias" "$_reset" "$_line"
-                else
-                    printf '[%s] %s\n' "$alias" "$_line"
-                fi
-            done
-            printf '%s\n' "${PIPESTATUS[0]}" > "$_rc"
-        ) | tee "$_log" &
+        # Pipeline shape, end to end, all in one background job:
+        #
+        #   { worker ; echo rc } | prefix each line | tee to log AND stdout
+        #
+        # The worker's stdout and stderr go into the first pipe. The
+        # prefixer reads line by line and writes each line tagged with
+        # `[alias]` to the second pipe. `tee` splits that pipe: one copy
+        # to the caller's stdout (so the invocation sees it live), one
+        # copy to <log_dir>/<repo>-<alias>.log (so the file exists even
+        # when stdout is captured). Nothing goes to /dev/null: the
+        # caller's stdout is the real output, and the file is a persisted
+        # mirror of the same bytes.
+        #
+        # The whole pipeline is backgrounded at once. `wait` below joins
+        # on all of them.
+        {
+            "$_ut_bin" _distribute-one "$_repo" "$alias" "$_do_install" 2>&1
+            printf '%s\n' "$?" > "$_rc"
+        } \
+        | while IFS= read -r _line; do
+            if [ -n "$_color" ]; then
+                printf '%b[%s]%b %s\n' "$_color" "$alias" "$_reset" "$_line"
+            else
+                printf '[%s] %s\n' "$alias" "$_line"
+            fi
+        done \
+        | tee -a "$_log" &
 
         _pids+=("$!")
     done
@@ -385,6 +405,35 @@ _distribute_one_mix() {
     for _p in "${_pids[@]}"; do
         wait "$_p" || true
     done
+
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+    return $?
+}
+
+# _distribute_one_quiet <repo> <do_install> <log_dir> <sig_dir> <ut_bin> <alias...>
+# Quiet mode. Workers run in detached tmux sessions; their stdout and
+# stderr go straight to <log_dir>/<repo>-<alias>.log. Only the final
+# summary reaches the caller's stdout. No pane is created, no session
+# is attached, no per-worker line is echoed.
+#
+# This is the only mode that hides worker output entirely, so it is
+# opt-in (--quiet); it is never picked automatically. Any caller that
+# wants to see the workers in real time uses panes or mix.
+_distribute_one_quiet() {
+    _repo="$1" _do_install="$2" _log_dir="$3" _sig_dir="$4" _ut_bin="$5"
+    shift 5
+    _aliases=("$@")
+
+    for alias in "${_aliases[@]}"; do
+        _session="ut-quiet-$_repo-$alias"
+        _log="$_log_dir/$_repo-$alias.log"
+        _rc="$_sig_dir/$alias.rc"
+        tmux kill-session -t "$_session" 2>/dev/null || true
+        tmux new-session -d -s "$_session" \
+            "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
+    done
+
+    _wait_for_workers "$_sig_dir" "${_aliases[@]}"
 
     _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
     return $?
@@ -639,16 +688,42 @@ _local_repo_names() {
 
 cmd_distribute() {
     _install=0
-    _mode="panes"
+    _mode=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --install|-i) _install=1; shift ;;
-            --mix)        _mode="mix"; shift ;;
+            --mix)        _mode="mix";   shift ;;
+            --quiet)      _mode="quiet"; shift ;;
+            --panes)      _mode="panes"; shift ;;
             *)            break ;;
         esac
     done
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--mix] <repo|all>"
+    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--mix|--quiet|--panes] <repo|all>"
+
+    # Mode selection when the caller did not force one:
+    #
+    #   captured (CLIPSO_ACTIVE set) + NOT inside tmux  ->  mix
+    #   anything else                                    ->  panes
+    #
+    # Why mix in that one case: under clipso, clipso owns the PTY and
+    # captures everything ut writes to stdout. Panes need a terminal they
+    # can paint on that clipso does not capture; the only such terminal
+    # is a tmux session started OUTSIDE clipso ($TMUX set at the moment
+    # the distribution runs). When clipso runs with no surrounding tmux,
+    # there is no such terminal, and the only way to show the workers'
+    # output at all is to interleave it on ut's own stdout. mix does
+    # exactly that, with a coloured `[alias]` tag per line.
+    #
+    # With clipso + tmux, and without clipso in any context, panes are
+    # available and are the default.
+    if [ -z "$_mode" ]; then
+        if [ -n "${CLIPSO_ACTIVE:-}" ] && [ -z "${TMUX:-}" ]; then
+            _mode="mix"
+        else
+            _mode="panes"
+        fi
+    fi
 
     # Signals directory: one per process, shared across every repo this
     # invocation handles (`distribute all` calls _distribute_one N times).

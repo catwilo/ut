@@ -151,6 +151,24 @@ the question.
   `<repo>/.venv/bin/<tool>`, never the global one. See "ENVIRONMENT
   AND ISOLATION" for the full rule.
 
+- NEVER emit `clipso` in a suggested command, in any position, with
+  any flag, for any reason. `clipso run`, `clipso -`, `clipso <file>`,
+  `clipso paste`, `clipso target` -- none of them, ever. Only the user
+  wraps a command with clipso, by their own hand, in the moment.
+
+  Why: clipso captures the whole PTY stream, changes TTY behaviour,
+  and exports env vars that every wrapped tool sees. A suggestion that
+  slips a clipso wrap into a command block takes a capture decision out
+  of the user's hands, and the resulting output is not the output of
+  the command the assistant wanted the user to observe.
+
+  The assistant may explain clipso, read its source or config, and
+  design other tools to behave correctly when the user wraps them
+  (e.g. ut reads `CLIPSO_ACTIVE` to switch to mix mode). It may not
+  emit the wrap itself, even as the only way to verify something, even
+  when the user explicitly says "wrap this with clipso" -- in that case
+  emit the underlying command and let the user apply the wrapper.
+
 - NEVER suggest bare `ut status` (global sweep). It iterates every
   registered repo and scales linearly with repo count; with hundreds
   of repos it blocks the session. For one repo, use `ut info <repo>`
