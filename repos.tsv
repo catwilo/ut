@@ -7,7 +7,7 @@ zsh-setup	cfg,core	zsh setup + macOS bootstrap (--mac: Nix/deps/PATH/clipboard)	
 mitsuwiki	tool,web,core	personal offline SPA wiki	active	catwilo		
 minitools	util,core	small consolidated utility scripts	active	catwilo		
 audit-privacy	sec,core	privacy audit tool	active	catwilo		
-wlab	tool	workbench and lab repo	active	catwilo		
+wai	tool	workbench and lab repo	active	catwilo	/data/data/com.termux/files/home/unix-toolkit-tools/wai	
 neko	tool	neko project	active	catwilo		
 streaming	svc	streaming setup	active	catwilo		
 rsync-folder	util	rsync wrapper	active	catwilo		
