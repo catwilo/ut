@@ -117,13 +117,34 @@ _local_ips() {
 # This is "me" by definition even if the interface that had it is now down
 # (IPs are dynamic/router-assigned), so it complements live ifconfig lookup.
 _own_devices_ip() {
-    _oda="$(node_alias 2>/dev/null)"
-    [ -n "$_oda" ] || return 0
-    _odb="$(_identity_statedir)/devices.db"
-    [ -f "$_odb" ] || return 0
-    awk -F'|' -v a="$_oda" '
-        /^[[:space:]]*$/{next}/^#/{next}$1==a{print $2;exit}
-    ' "$_odb" 2>/dev/null
+    # Canonical source of this node's IP: the ts-devices.db block whose
+    # node_id matches ours. That is the same table every other consumer
+    # reads (distribute, machines, status). The old devices.db (legacy
+    # WLAN table) is no longer the source of truth and may be empty.
+    _od_nid="$(node_id 2>/dev/null)"
+    [ -n "$_od_nid" ] || return 0
+    # The devices table lives under the current project name (nina).
+    # _identity_statedir still carries the legacy "noemap" path when the
+    # environment was set up before the rename; use the same resolution
+    # the rest of ut already uses (NOEMAP_HOME override, nina default).
+    _od_dir="${NOEMAP_HOME:-$HOME/.local/share/nina}/state"
+    _od_db="$_od_dir/ts-devices.db"
+    [ -f "$_od_db" ] || return 0
+    awk -v id="$_od_nid" '
+        BEGIN { RS=""; FS="\n" }
+        {
+            nid = ""; ip = ""
+            for (i = 1; i <= NF; i++) {
+                colon = index($i, ":")
+                if (colon == 0) continue
+                fk = substr($i, 1, colon - 1)
+                fv = substr($i, colon + 2)
+                if (fk == "node_id") nid = fv
+                if (fk == "ip") ip = fv
+            }
+            if (nid == id && ip != "") { print ip; exit }
+        }
+    ' "$_od_db" 2>/dev/null
 }
 
 is_local_ip() {

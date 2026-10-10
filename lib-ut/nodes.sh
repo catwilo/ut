@@ -262,7 +262,7 @@ _distribute_install_remote() {
 _distribute_one() {
     _repo="$1" _do_install="$2" _mode="${3:-panes}" _sig_dir="$4"
     case "$_do_install" in 0|1) ;; *) die "_do_install must be 0 or 1, got: $_do_install" ;; esac
-    case "$_mode" in panes|mix) ;; *) die "_mode must be panes or mix, got: $_mode" ;; esac
+    case "$_mode" in panes|mix|quiet) ;; *) die "_mode must be panes, mix or quiet, got: $_mode" ;; esac
     [ -n "$_sig_dir" ] && [ -d "$_sig_dir" ] || die "_sig_dir missing or not a directory"
     _target="$(repo_dir "$_repo")"
     [ -e "$_target/.git" ] || die "$_repo not cloned at $_target"
