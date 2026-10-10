@@ -92,10 +92,34 @@ through the `repo_dir` helper (lib-ut/query.sh).
 
     ut machines                ping all nodes
     ut machines diff           per-repo git state across nodes
-    ut distribute <repo>       pull repo on all reachable nodes
+    ut distribute <repo>       pull repo on all reachable remote nodes
     ut distribute --install <repo>  pull + run install.sh local and remote
     ut distribute all          pull every repo tagged 'core'
     ut distribute --install all     pull + install every core repo
+
+#### distribute display modes
+
+Every `ut distribute` invocation runs the remote workers in parallel and
+picks one of three display modes. The mode is decided automatically from
+the context unless one of the flags forces it.
+
+| Mode    | Chosen by                                                   | What the caller sees                                        |
+|---------|-------------------------------------------------------------|-------------------------------------------------------------|
+| `panes` | default (interactive TTY, or a tmux session already open)   | one byobu/tmux pane per node, live output per pane          |
+| `mix`   | default under a capture wrapper (`CLIPSO_ACTIVE`) without tmux | one line per remote event, prefixed with a coloured `[alias]` tag |
+| `quiet` | explicit `--quiet` only                                     | nothing per node; only the final `ok/failed` summary         |
+
+Forcing the mode:
+
+    ut distribute --panes <repo>   force byobu panes
+    ut distribute --mix   <repo>   force tagged interleaved output
+    ut distribute --quiet <repo>   force silent (summary only)
+
+The local node is never in the worker list: `is_local_ip` filters it out.
+`--quiet` is the only mode that hides the worker output entirely.
+
+The full output of every worker is preserved under
+`~/.local/share/ut/distribute/<repo>-<alias>.log` regardless of mode.
 
 ## Standard fix flow
 

@@ -33,7 +33,7 @@ two systems are independent and share only the name.
 | `registry.sh` | `cmd_add/untrack/unclone/tag/pause/resume/archive/info`. Edits repos.tsv. |
 | `admin.sh` | `cmd_new/create/delete/rename`. Destructive GitHub operations. Also `_tsv_publish()`. |
 | `nodes.sh` | `cmd_machines/distribute`. Multi-node via nina/nssh. |
-| `identity.sh` | `is_local_ip()`. Node identity helpers. |
+| `identity.sh` | `is_local_ip()`, `node_id()`, `_own_devices_ip()` (reads the current node IP from `ts-devices.db`). Node identity helpers. |
 
 ## Entrypoint flow
 
@@ -100,14 +100,58 @@ Snapshots live in `$TMPDIR/ut-status/<repo>/`, cleaned after report.
 
 ## Multi-node distribution
 
-`ut distribute <repo>` copies the repo to every reachable node:
+`ut distribute <repo>` updates the repo on every reachable REMOTE node.
+The local node is always excluded from the remote worker list
+(`is_local_ip` compares each candidate against the node's own canonical
+IP, read from `ts-devices.db`).
 
-1. Resolve node aliases via `nina status`.
-2. For each remote alias: `nssh <alias> "git -C ~/unix-toolkit-tools/<repo> pull --rebase origin main"`.
-3. If `--no-install` is NOT set and `install.sh` exists in the repo,
-   run it locally first, then on each remote.
+Flow:
 
-`ut distribute --install <repo>` = local `install.sh` + `ut distribute <repo>` + remote `install.sh`.
+1. Resolve node aliases via `_all_nodes_aliases` (`lib-ut/nodes.sh`).
+2. Filter out the local node (`is_local_ip`).
+3. Run `install.sh` locally when `--install` is set.
+4. Launch one worker per remote alias, in parallel, in the display mode
+   chosen by the caller (see below).
+5. Wait for every worker to finish (`_wait_for_workers`, with
+   `UT_DISTRIBUTE_MAX_WAIT` seconds as the ceiling; default 3600).
+6. Read the per-worker exit code from `$sig_dir/<alias>.rc` and print
+   `ok`/`failed` per node.
+
+`ut distribute --install <repo>` = local `install.sh` + remote workers run
+`<path>/install.sh`.
+
+### Display modes
+
+Three modes. The default is chosen from context; a flag forces one.
+
+| Mode    | Trigger                                                        |
+|---------|----------------------------------------------------------------|
+| `panes` | interactive TTY with no capture wrapper (or `--panes`)         |
+| `mix`   | captured stdout (`CLIPSO_ACTIVE` set) with no tmux (or `--mix`) |
+| `quiet` | explicit `--quiet` only (never automatic)                      |
+
+`panes` creates a new tmux window `ut-workers` in the caller's session
+(or a new session `ut-view-<repo>` when there is no surrounding tmux),
+splits one pane per alias with `even-horizontal`, and attaches the caller.
+
+`mix` runs each worker in a background subshell whose stdout/stderr is
+piped through a per-line prefixer, then through `tee` to both the caller
+stdout and `~/.local/share/ut/distribute/<repo>-<alias>.log`. The prefixer
+tags each line `[<alias>]`, coloured when stdout is a TTY. Lines from
+different workers arrive in the order produced (true parallel).
+
+`quiet` runs the workers in detached tmux sessions; their output goes only
+to the per-alias log file. The caller sees only the final summary. This is
+the only mode that hides per-worker output; it is opt-in.
+
+### Signals and wait
+
+Every worker writes its exit code to `$sig_dir/<alias>.rc`, where
+`$sig_dir` is a per-process `mktemp -d` created by `cmd_distribute` and
+removed by an `EXIT` trap. A fresh directory per run means a stale `.rc`
+from a previous invocation can never be mistaken for success.
+`_wait_for_workers` polls the `rc` files (not tmux wait-for, which does
+not queue signals) with a configurable ceiling.
 
 ## Hook population
 
