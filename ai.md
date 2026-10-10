@@ -118,13 +118,39 @@ the question.
   unsupported. Silence is a lie by omission.
 
 - NEVER emit a command containing any pipe or output redirection that
-  can suppress stderr: `2>/dev/null`, `2>&1`, `2>&1 | grep`, `| head`,
-  `| tail`, `| grep`, `| awk`, `| sed`, `| wc`, `&>`, `2>`. This is the
-  single most-violated rule and the direct cause of silent failures
-  (ut#11, _tsv_publish). Run every command raw; stderr must reach the
-  user's terminal unfiltered. To persist output, write to a new file
-  (heredoc or `>` into a fresh path) and read it back in a separate
-  step -- never transform a live command's stream.
+  can suppress stderr or truncate stdout. This is the SINGLE
+  MOST-VIOLATED rule in this spec and the direct cause of silent
+  failures (ut#11, _tsv_publish). ABSOLUTELY FORBIDDEN, no exceptions,
+  no matter how convenient the filter looks and no matter how it is
+  justified in the moment:
+
+      `2>/dev/null`   `2>&1`   `&>`   `2>`   `> /dev/null`
+      `| head`   `| tail`   `| grep`   `| awk`   `| sed`
+      `| wc`   `| sort`   `| uniq`   `| cut`   `| tr`
+      `2>&1 | tail`   `2>&1 | head`   `2>&1 | grep`   `2>&1 | <any>`
+      `<cmd> | <anything>` in any position, for any reason
+
+  Rationale, not decoration: a pipe hides the exit code of the
+  upstream command (Bash reports only the last command's status by
+  default), drops every line that does not pass the filter, and
+  destroys the only evidence the user has. `| tail` and `| head` on a
+  stream are the most common disguised form of this violation -- they
+  look like "just formatting" but they truncate real output. Refusing
+  them is non-negotiable.
+
+  Run every command raw; both stdout and stderr must reach the user's
+  terminal untouched. To persist output, use a heredoc or `>` into a
+  fresh file, then `cat -n` that file in a SEPARATE block -- never
+  transform a live command's stream in-flight.
+
+  Applies equally to verification blocks, smoke tests, diagnostic
+  reads, build output, and every other command, without exception.
+- NEVER install Python dependencies globally or with `pip install
+  --user`. Every tool installs its own dependencies into its own venv
+  at `<repo>/.venv/`. Running tests or linters means invoking
+  `<repo>/.venv/bin/<tool>`, never the global one. See "ENVIRONMENT
+  AND ISOLATION" for the full rule.
+
 - NEVER suggest bare `ut status` (global sweep). It iterates every
   registered repo and scales linearly with repo count; with hundreds
   of repos it blocks the session. For one repo, use `ut info <repo>`
@@ -239,6 +265,51 @@ if the tool exists, it is used. "Faster to type manually" is not an
 exception. Chaining a tool with its own subcommand is still tool-first
 (`ut branch <repo> ...`); the forbidden thing is bypassing the tool
 entirely with the raw primitive it wraps.
+
+## ENVIRONMENT AND ISOLATION
+
+Every tool keeps its own isolated environment. Nothing is ever
+installed into the system Python, into a shared site-packages, or
+into the user's HOME. This is a hard rule, not a preference, and it
+applies from the first invocation of any tool in any repo.
+
+- Python tools declare their dependencies in the repo
+  (`pyproject.toml`, `requirements.txt`, `pyproject.toml[project.optional-dependencies]`)
+  and install them into a per-tool venv at `<repo>/.venv/`. That venv
+  lives inside the repo, is never shared between tools, and is
+  gitignored (never committed).
+- Running tests, linters or any tool that needs Python packages means
+  invoking the venv binary explicitly:
+
+      <repo>/.venv/bin/python -m pytest ...
+      <repo>/.venv/bin/ruff check .
+      <repo>/.venv/bin/mypy ...
+
+  Never rely on the venv being active in the shell: each command runs
+  in an ephemeral session and the environment does not persist.
+- If `<repo>/.venv/` does not exist, create it first with the system
+  Python (`python3 -m venv .venv`) and install the tool's declared
+  dependencies there. Do this BEFORE running tests, not after.
+  Missing dependencies are never an excuse to install globally.
+- NEVER run `pip install` without a target venv, and NEVER with
+  `--user`. Both contaminate every other project on the machine and
+  are exactly the failure mode this rule prevents. `--user` is not a
+  middle ground: it is still outside the repo, still global to the
+  user, still shared across tools.
+- System package managers (apt, pkg, brew) are reserved for OS-level
+  tools (git, bash, curl, aircrack-ng, go, ripgrep, etc.). Install
+  through them only when the OS does not provide the tool AND the
+  user has confirmed the install in the moment. Never use a system
+  package manager to satisfy a Python dependency of a specific tool.
+- Test runners, linters, formatters and type checkers declared by a
+  repo are dependencies of that repo. They go into that repo's venv
+  (`<repo>/.venv/bin/pytest`, `<repo>/.venv/bin/ruff`, etc.), never
+  into the machine's Python.
+- Before running a tool from PATH (e.g. `ruff`, `pytest`, `black`),
+  confirm it is the one the repo declares. If the tool is not in the
+  repo's venv, create the venv and install it there first; do not
+  fall back to a globally-installed copy that may be a different
+  version than the repo expects.
 
 ## EXECUTION CONVENTIONS
 
