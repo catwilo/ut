@@ -46,7 +46,7 @@ debux	tool,env	minimal graphical Linux environment for web dev from Android		cat
 gya	tool	wrapper CLI para gallery-dl + yt-dlp en Termux		catwilo		
 hardware-bom	core,infra,rpx-report	Bill of Materials de hardware compartido: BaquiaRaudal + proyecto rack sobre infraestructura multiproposito	active	catwilo		rpx
 orcdroid	tool core	Android remoto en Oracle Cloud via Waydroid y Sunshine	active	catwilo		
-termux-node	util,core	Termux no-root bootstrap: base packages + runit services (sshd) + tools	active	catwilo		
+nodorin	util,core	Termux no-root bootstrap: base packages + runit services (sshd) + tools	active	catwilo	/data/data/com.termux/files/home/unix-toolkit-tools/nodorin	
 ksite	tool,web,core	gestor de sitios web local y desplegado -- provider-agnostico	active	catwilo		
 arepa-pos	client,web	repo compartido por Kbaulo -- a investigar y poblar tareas iniciales en miko	active	Kbaulo		
 sustentacion-bom	core,infra,rpx-report	Documento de sustentación de la iniciativa BaquiaRaudal: Villanueva Digital	active			rpx
