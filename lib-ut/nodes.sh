@@ -178,7 +178,7 @@ cmd_machines_diff() {
         printf "${B}%-${_rw}s${Z}" "REPO"
         for _n in $_nodes; do printf "${B}%-${_cw}s${Z}" "$_n"; done
         printf '\n'
-        _width=$((_rw + _cw * $(printf '%s\n' $_nodes | wc -l)))
+        _width=$((_rw + _cw * $(printf '%s\n' "$_nodes" | wc -l)))
         printf '%s\n' "$(printf -- '-%.0s' $(seq 1 $_width))"
         cat "$_difflines"
         printf '\n'
@@ -231,6 +231,14 @@ _remote_repo_path() {
 }
 
 # _distribute_install_remote <repo> <alias> -- run install.sh on a remote node.
+#
+# If the repo declares .ut-install-root at its root, install.sh requires
+# root. In that case we run with "nssh -t" so a TTY is allocated on the
+# remote and sudo can prompt for the password there. sudo reads the
+# password from the TTY, never from stdin/argv/env, so it never lands in
+# logs, process tables or shell history. If no TTY is available (quiet
+# mode, backgrounded), install.sh fails fast with an actionable message
+# instead of hanging on a sudo prompt.
 _distribute_install_remote() {
     _repo="$1" _alias="$2"
     _rpath="$(_remote_repo_path "$_alias" "$_repo")"
@@ -238,10 +246,18 @@ _distribute_install_remote() {
         warn "$_alias — cannot resolve repo path, skipping install"
         return 1
     fi
-    info "cmd: nssh \"$_alias\" \"bash $_rpath/install.sh\""
-    if ! nssh "$_alias" "bash $_rpath/install.sh"; then
-        warn "$_alias — install.sh failed"
-        return 1
+    if nssh "$_alias" "test -f \"$_rpath/.ut-install-root\"" 2>/dev/null; then
+        info "cmd: nssh -t \"$_alias\" \"bash $_rpath/install.sh\"  (requires root)"
+        if ! nssh -t "$_alias" "bash $_rpath/install.sh"; then
+            warn "$_alias — install.sh failed"
+            return 1
+        fi
+    else
+        info "cmd: nssh \"$_alias\" \"bash $_rpath/install.sh\""
+        if ! nssh "$_alias" "bash $_rpath/install.sh"; then
+            warn "$_alias — install.sh failed"
+            return 1
+        fi
     fi
     ok "$_alias — installed"
 }
@@ -757,7 +773,12 @@ cmd_distribute() {
         else
             info "cmd: ut distribute $_r"
         fi
-        _distribute_one "$_r" "$_install" "$_mode" "$_sig_dir" && printf '%s\n' "$_r" >> "$_ok" || { warn "$_r  skipped: distribute failed"; printf '%s\n' "$_r" >> "$_skipped"; }
+        if _distribute_one "$_r" "$_install" "$_mode" "$_sig_dir"; then
+            printf '%s\n' "$_r" >> "$_ok"
+        else
+            warn "$_r  skipped: distribute failed"
+            printf '%s\n' "$_r" >> "$_skipped"
+        fi
     done 3< <(_local_repo_names)
     rm -f "$_corelist"
     _nok=$(wc -l < "$_ok" | tr -d ' '); _nskip=$(wc -l < "$_skipped" | tr -d ' ')
