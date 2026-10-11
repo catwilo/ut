@@ -440,8 +440,10 @@ _distribute_one_quiet() {
     shift 5
     _aliases=("$@")
 
+    local -a _sessions=()
     for alias in "${_aliases[@]}"; do
         _session="ut-quiet-$_repo-$alias"
+        _sessions+=("$_session")
         _log="$_log_dir/$_repo-$alias.log"
         _rc="$_sig_dir/$alias.rc"
         tmux kill-session -t "$_session" 2>/dev/null || true
@@ -449,9 +451,15 @@ _distribute_one_quiet() {
             "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
     done
 
-    _wait_for_workers "$_sig_dir" "${_aliases[@]}"
+    local _wait_rc=0 _report_rc=0
+    _wait_for_workers "$_sig_dir" "${_aliases[@]}" || _wait_rc=$?
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}" || _report_rc=$?
 
-    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+    for _session in "${_sessions[@]}"; do
+        tmux kill-session -t "$_session" 2>/dev/null || true
+    done
+
+    [ "$_wait_rc" -eq 0 ] && [ "$_report_rc" -eq 0 ]
     return $?
 }
 
@@ -498,11 +506,17 @@ _distribute_one_panes() {
                 "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" 2>&1 | tee \"$_log\"; echo \${PIPESTATUS[0]} > \"$_rc\"'"
         done
         tmux select-layout -t "$_win" even-horizontal
-        # Keep panes readable after workers exit.
         tmux set-option -w -t "$_win" remain-on-exit on
 
-        _wait_for_workers "$_sig_dir" "${_aliases[@]}"
-        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+        local _wait_rc=0 _report_rc=0
+        _wait_for_workers "$_sig_dir" "${_aliases[@]}" || _wait_rc=$?
+        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}" || _report_rc=$?
+
+        # Automatic cleanup: kill the workers window. tmux returns the
+        # user to the previous window when the current one dies.
+        tmux kill-window -t "$_win" 2>/dev/null || true
+
+        [ "$_wait_rc" -eq 0 ] && [ "$_report_rc" -eq 0 ]
         return $?
     fi
 
@@ -540,15 +554,24 @@ _distribute_one_panes() {
             warn "  re-attach with: tmux attach -t $_view"
         fi
 
-        _wait_for_workers "$_sig_dir" "${_aliases[@]}"
-        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+        local _wait_rc=0 _report_rc=0
+        _wait_for_workers "$_sig_dir" "${_aliases[@]}" || _wait_rc=$?
+        _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}" || _report_rc=$?
+
+        # Automatic cleanup: kill the viewer session.
+        tmux kill-session -t "$_view" 2>/dev/null || true
+
+        [ "$_wait_rc" -eq 0 ] && [ "$_report_rc" -eq 0 ]
         return $?
     fi
 
     # Case 3: silent mode. Run workers detached in individual sessions,
-    # wait, report. No attach is attempted, no viewer session is created.
+    # wait, report, then kill every session automatically. No attach is
+    # attempted, no viewer session is left behind.
+    local -a _sessions=()
     for alias in "${_aliases[@]}"; do
         _session="ut-dist-$_repo-$alias"
+        _sessions+=("$_session")
         _log="$_log_dir/$_repo-$alias.log"
         _rc="$_sig_dir/$alias.rc"
         tmux kill-session -t "$_session" 2>/dev/null || true
@@ -556,8 +579,15 @@ _distribute_one_panes() {
             "bash -c '\"$_ut_bin\" _distribute-one \"$_repo\" \"$alias\" \"$_do_install\" > \"$_log\" 2>&1; echo \$? > \"$_rc\"'"
     done
 
-    _wait_for_workers "$_sig_dir" "${_aliases[@]}"
-    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}"
+    local _wait_rc=0 _report_rc=0
+    _wait_for_workers "$_sig_dir" "${_aliases[@]}" || _wait_rc=$?
+    _distribute_one_report "$_repo" "$_do_install" "$_log_dir" "$_sig_dir" "${_aliases[@]}" || _report_rc=$?
+
+    for _session in "${_sessions[@]}"; do
+        tmux kill-session -t "$_session" 2>/dev/null || true
+    done
+
+    [ "$_wait_rc" -eq 0 ] && [ "$_report_rc" -eq 0 ]
     return $?
 }
 
