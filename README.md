@@ -94,32 +94,25 @@ through the `repo_dir` helper (lib-ut/query.sh).
     ut machines diff           per-repo git state across nodes
     ut distribute <repo>       pull repo on all reachable remote nodes
     ut distribute --install <repo>  pull + run install.sh local and remote
-    ut distribute all          pull every repo tagged 'core'
-    ut distribute --install all     pull + install every core repo
 
 #### distribute display modes
 
-Every `ut distribute` invocation runs the remote workers in parallel and
-picks one of three display modes. The mode is decided automatically from
-the context unless one of the flags forces it.
+Ut delegates the transport to `nya`. The display mode is chosen by nya's
+auto-detection (or forced with `--panes` / `--mix` / `--quiet`, which ut
+forwards verbatim). See `nya --help` for the modes:
 
-| Mode    | Chosen by                                                   | What the caller sees                                        |
-|---------|-------------------------------------------------------------|-------------------------------------------------------------|
-| `panes` | default (interactive TTY, or a tmux session already open)   | one byobu/tmux pane per node, live output per pane          |
-| `mix`   | default under a capture wrapper (`CLIPSO_ACTIVE`) without tmux | one line per remote event, prefixed with a coloured `[alias]` tag |
-| `quiet` | explicit `--quiet` only                                     | nothing per node; only the final `ok/failed` summary         |
+    panes     tmux window, un panel por nodo (live output)
+    mix       prefijo [alias] por linea
+    grouped   agrupa nodos con salida identica
+    quiet     solo resumen; logs a disco
+    json      salida estructurada (no la usa ut)
 
-Forcing the mode:
+Nya's auto-detection:
 
-    ut distribute --panes <repo>   force byobu panes
-    ut distribute --mix   <repo>   force tagged interleaved output
-    ut distribute --quiet <repo>   force silent (summary only)
-
-The local node is never in the worker list: `is_local_ip` filters it out.
-`--quiet` is the only mode that hides the worker output entirely.
-
-The full output of every worker is preserved under
-`~/.local/share/ut/distribute/<repo>-<alias>.log` regardless of mode.
+    clipso sin tmux  -> mix
+    dentro de tmux   -> panes
+    TTY sin tmux     -> mix
+    sin TTY          -> grouped
 
 ## Standard fix flow
 
@@ -165,7 +158,7 @@ hand-edit unless recovering from an error.
 
 - `miko` owns tasks. `ut` does not know about tasks.
 - `ksite` owns websites. `ut` does not know about Netlify/Cloudflare.
-- `nina` provides node aliases. `ut machines` uses them via nssh.
+- `nina` provides node aliases. `ut machines` uses them via nya.
 - `gh` is required for GitHub operations (create, delete, rename).
 
 ## Documentation

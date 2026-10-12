@@ -32,7 +32,8 @@ two systems are independent and share only the name.
 | `sync.sh` | `cmd_sync()`. Pulls all repos, self-updates ut. |
 | `registry.sh` | `cmd_add/untrack/unclone/tag/pause/resume/archive/info`. Edits repos.tsv. |
 | `admin.sh` | `cmd_new/create/delete/rename`. Destructive GitHub operations. Also `_tsv_publish()`. |
-| `nodes.sh` | `cmd_machines/distribute`. Multi-node via nina/nssh. |
+| `nodes.sh` | `cmd_machines`. Node listing and machine-state reads via nina + nya. |
+| `distribute.sh` | `cmd_distribute`. Delegates the per-repo transport to `nya run`. Ut keeps the policy (what "install" means, which repo, path resolution); nya owns the fan-out. |
 | `identity.sh` | `is_local_ip()`, `node_id()`, `_own_devices_ip()` (reads the current node IP from `ts-devices.db`). Node identity helpers. |
 
 ## Entrypoint flow
@@ -93,65 +94,39 @@ two systems are independent and share only the name.
 2. `git fetch origin` in the target repo.
 3. Snapshot local: `status --short`, `branch -v --no-merged main`,
    `log --oneline -5`.
-4. Snapshot each remote node via `nssh` (same commands).
+4. Snapshot each remote node via `nya` (same commands).
 5. Diff local vs each remote. Report clean / diff / unreachable.
 
 Snapshots live in `$TMPDIR/ut-status/<repo>/`, cleaned after report.
 
 ## Multi-node distribution
 
-`ut distribute <repo>` updates the repo on every reachable REMOTE node.
-The local node is always excluded from the remote worker list
-(`is_local_ip` compares each candidate against the node's own canonical
-IP, read from `ts-devices.db`).
+`ut distribute <repo> [--install] [--mix|--quiet|--panes]` updates the
+repo on every reachable remote node. Ut retains the policy; **nya owns
+the transport**.
 
 Flow:
 
-1. Resolve node aliases via `_all_nodes_aliases` (`lib-ut/nodes.sh`).
-2. Filter out the local node (`is_local_ip`).
-3. Run `install.sh` locally when `--install` is set.
-4. Launch one worker per remote alias, in parallel, in the display mode
-   chosen by the caller (see below).
-5. Wait for every worker to finish (`_wait_for_workers`, with
-   `UT_DISTRIBUTE_MAX_WAIT` seconds as the ceiling; default 3600).
-6. Read the per-worker exit code from `$sig_dir/<alias>.rc` and print
-   `ok`/`failed` per node.
+1. Ut runs `install.sh` locally when `--install` is set.
+2. Ut builds the remote command per repo: resolve path via
+   `ut path <repo>` (fall back to `ut install <repo>`), `cd` + `git pull
+   --rebase origin main`, and `bash install.sh` when `--install`.
+3. Ut invokes `nya run [--mode M] @all -- "<remote cmd>"`. Nya resolves
+   the target list (excluding the local node), picks the display mode
+   from context, and returns the aggregate exit code.
+4. Ut logs the change via `log_change` on success.
 
-`ut distribute --install <repo>` = local `install.sh` + remote workers run
-`<path>/install.sh`.
+What lives in nya (see its own ARCHITECTURE.md): parallel fan-out,
+warm-up of SSH multiplex, per-worker `.log` + `.rc` protocol, Ctrl-C in
+two phases, display modes (`panes` / `mix` / `grouped` / `quiet` /
+`json`), retry policy, log retention.
 
-### Display modes
+There is no `ut distribute all`. For multiple repos, name each one:
 
-Three modes. The default is chosen from context; a flag forces one.
+    ut distribute <repo1> && ut distribute <repo2>
 
-| Mode    | Trigger                                                        |
-|---------|----------------------------------------------------------------|
-| `panes` | interactive TTY with no capture wrapper (or `--panes`)         |
-| `mix`   | captured stdout (`CLIPSO_ACTIVE` set) with no tmux (or `--mix`) |
-| `quiet` | explicit `--quiet` only (never automatic)                      |
-
-`panes` creates a new tmux window `ut-workers` in the caller's session
-(or a new session `ut-view-<repo>` when there is no surrounding tmux),
-splits one pane per alias with `even-horizontal`, and attaches the caller.
-
-`mix` runs each worker in a background subshell whose stdout/stderr is
-piped through a per-line prefixer, then through `tee` to both the caller
-stdout and `~/.local/share/ut/distribute/<repo>-<alias>.log`. The prefixer
-tags each line `[<alias>]`, coloured when stdout is a TTY. Lines from
-different workers arrive in the order produced (true parallel).
-
-`quiet` runs the workers in detached tmux sessions; their output goes only
-to the per-alias log file. The caller sees only the final summary. This is
-the only mode that hides per-worker output; it is opt-in.
-
-### Signals and wait
-
-Every worker writes its exit code to `$sig_dir/<alias>.rc`, where
-`$sig_dir` is a per-process `mktemp -d` created by `cmd_distribute` and
-removed by an `EXIT` trap. A fresh directory per run means a stale `.rc`
-from a previous invocation can never be mistaken for success.
-`_wait_for_workers` polls the `rc` files (not tmux wait-for, which does
-not queue signals) with a configurable ceiling.
+An implicit fan-out to N repos multiplies the blast radius without
+notice and cannot be reviewed without flooding the terminal.
 
 ## Hook population
 
