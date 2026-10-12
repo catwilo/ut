@@ -20,7 +20,7 @@ node. The bug survived for days because the error was invisible.
    command -- the same legitimate case as the initial README commit in
    `cmd_new`. The hook policy targets development commits, not ut's own
    registry self-update.
-2. `ai.md` now forbids `2>/dev/null` (and any pipe/redirection that
+2. `kya/canon/contract.md` now forbids `2>/dev/null` (and any pipe/redirection that
    discards stderr) as a critical rule for all code in the ecosystem.
 
 **Consequence.** Registry updates now propagate correctly. Future silent

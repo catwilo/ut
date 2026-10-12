@@ -172,7 +172,5 @@ hand-edit unless recovering from an error.
 
 - `ARCHITECTURE.md` -- module layout, flow, invariants.
 - `DECISIONS.md` -- why things are the way they are (ADR-lite).
-- `ai.md` -- LLM session spec (not for humans; ignore unless extending
-  the AI contract).
 - `PORTFOLIO.md` -- project index by tag.
 - `err.md` -- known failure modes and recovery.
