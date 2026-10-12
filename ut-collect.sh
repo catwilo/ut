@@ -2,7 +2,7 @@
 # ut-collect.sh — emit per-repo git state for `ut machines diff`
 # output (TAB-separated, one line per repo): repo	branch	hash	ahead	dirty
 # POSIX sh: runs identically on Termux (busybox), Debian, macOS.
-# invoked locally (sh ut-collect.sh) and remotely (nssh <alias> "sh -s" < ut-collect.sh)
+# invoked locally (sh ut-collect.sh) and remotely (nya <alias> "sh -s" < ut-collect.sh)
 
 _tsv="$HOME/unix-toolkit-tools/ut/repos.tsv"
 [ -f "$_tsv" ] || exit 0

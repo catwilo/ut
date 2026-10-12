@@ -59,8 +59,8 @@ cmd_status() {
         _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
         if [ -f "$_devices" ]; then
             . "${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/core/blockdb.sh" 2>/dev/null || true
-            # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and
-            # the remote command can drain the here-string, silently
+            # Aliases come from fd 3, not fd 0: the remote command
+            # inherits fd 0 and can drain the here-string, silently
             # truncating the loop after the first non-local node.
             while IFS= read -r alias <&3; do
                 [ -z "$alias" ] && continue
@@ -68,8 +68,8 @@ cmd_status() {
                 [ -n "$_mdblk" ] || continue
                 ip="$(blockdb_field "$_mdblk" ip 2>/dev/null)"
                 is_local_ip "$ip" && continue
-                info "cmd: nssh \"$alias\" \"cd ~/unix-toolkit-tools/$repo && git fetch --quiet origin && { git status --short; git branch -v --no-merged main; git log --oneline -5; } 2>/dev/null\""
-                if nssh "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" > "$_snap_dir/$repo/$alias" 2>/dev/null; then
+                info "cmd: nya \"$alias\" \"cd ~/unix-toolkit-tools/$repo && git fetch --quiet origin && { git status --short; git branch -v --no-merged main; git log --oneline -5; } 2>/dev/null\""
+                if nya "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" > "$_snap_dir/$repo/$alias" 2>/dev/null; then
                     :
                 else
                     : > "$_snap_dir/$repo/$alias.unreach"

@@ -82,10 +82,10 @@ cmd_machines() {
     _hosts="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/hosts.db"
     [ -f "$_devices" ] || die "device table not found: $_devices"
     [ -f "$_hosts" ]   || die "hosts.db not found: $_hosts"
-    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
-    # remote git pull can drain the here-string, silently truncating
-    # the loop after the first non-local node. Explicit fd separates
-    # the loop's input from the commands it runs.
+    # Aliases come from fd 3, not fd 0: the remote command inherits fd 0
+    # and can drain the here-string, silently truncating the loop after
+    # the first non-local node. Explicit fd separates the loop's input
+    # from the commands it runs.
     while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _mblk="$(blockdb_get "$_devices" alias "$alias")"
@@ -94,7 +94,7 @@ cmd_machines() {
         _os=$(grep "^$ip|" "$_hosts" | cut -d'|' -f2)
         _os="${_os:-unknown}"
         bold "── $alias [$_os] ──"
-        if nssh "$alias" "ut status" 2>/dev/null; then
+        if nya "$alias" "ut status" 2>/dev/null; then
             true
         else
             err "$alias — unreachable"
@@ -103,7 +103,7 @@ cmd_machines() {
 }
 
 cmd_machines_diff() {
-    info "cmd: nssh <alias> \"sh -s\" < ut-collect.sh > tmp/utdiff/<alias>"
+    info "cmd: nya <alias> \"sh -s\" < ut-collect.sh > tmp/utdiff/<alias>"
     _devices="$(_nodes_db)"
     [ -f "$_devices" ] || die "device table not found: $_devices"
     _collect="$(dirname "$(realpath "$0")")/ut-collect.sh"
@@ -111,17 +111,17 @@ cmd_machines_diff() {
     mkdir -p "$HOME/tmp"; _out="$HOME/tmp/utdiff"; rm -rf "$_out"; mkdir -p "$_out"
     _nodes="local"
     sh "$_collect" > "$_out/local" 2>/dev/null
-    # Aliases come from fd 3, not fd 0: nssh inherits fd 0 and the
-    # remote git pull can drain the here-string, silently truncating
-    # the loop after the first non-local node. Explicit fd separates
-    # the loop's input from the commands it runs.
+    # Aliases come from fd 3, not fd 0: the remote command inherits fd 0
+    # and can drain the here-string, silently truncating the loop after
+    # the first non-local node. Explicit fd separates the loop's input
+    # from the commands it runs.
     while IFS= read -r alias <&3; do
         [ -z "$alias" ] && continue
         _mdblk="$(blockdb_get "$_devices" alias "$alias")"
         [ -n "$_mdblk" ] || continue
         ip="$(blockdb_field "$_mdblk" ip)"
         is_local_ip "$ip" && continue
-        if nssh "$alias" "sh -s" < "$_collect" > "$_out/$alias" 2>/dev/null; then
+        if nya "$alias" "sh -s" < "$_collect" > "$_out/$alias" 2>/dev/null; then
             _nodes="$_nodes $alias"
         else
             : > "$_out/$alias"; printf 'UNREACH\n' > "$_out/$alias.flag"
@@ -139,7 +139,7 @@ cmd_machines_diff() {
     _tally="$_out/.tally"; : > "$_tally"
     _difflines="$_out/.difflines"; : > "$_difflines"
 
-    info "cmd: repos_all | while read repo; do nssh <alias> ... ; done"
+    info "cmd: repos_all | while read repo; do nya <alias> ... ; done"
     repos_all | while IFS= read -r _repo; do
         [ -z "$_repo" ] && continue
 
