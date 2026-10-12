@@ -30,7 +30,7 @@ die() { err "$*"; exit 1; }
 [ -f "$TSV" ] || die "repos.tsv not found at $TSV"
 
 LIB_UT="$(dirname "$(realpath "$0")")/lib-ut"
-for _lib in changelog query status sync registry admin nodes identity; do
+for _lib in changelog query status sync registry admin nodes distribute_modes distribute identity; do
     . "$LIB_UT/$_lib.sh"
 done
 
