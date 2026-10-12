@@ -9,26 +9,18 @@
 #   ut distribute <repo> [--install] [--mix|--quiet|--panes]
 #     -> arma el comando remoto por repo
 #     -> corre install.sh local si --install
-#     -> invoca: nya run --mode <mode> @all -- "<comando>"
-#     -> log_change segun rc de nya
-#
-#   ut distribute all [--install] [--mode]
-#     -> itera los repos core-tagged, mismo flujo por repo
+#     -> invoca: nya run [--mode M] @all -- "<comando>"
 #
 # Lo que queda en ut (politica):
 #   - que es "install": bash install.sh en el root del repo.
-#   - que es "distribute all": solo repos core-tagged.
-#   - _repo_is_dirty como gate.
-#   - log_change: registro en .ut-changelog.
-#   - _local_repo_names: como ut enumera repos.
 #
 # Lo que va a nya (transporte):
-#   - fan-out paralelo, modos (panes/mix/quiet/json/grouped), warm-up
-#     de multiplex, protocolo .log/.rc, Ctrl-C en dos fases, retencion.
+#   - fan-out paralelo, modos, warm-up de multiplex, protocolo
+#     .log/.rc, Ctrl-C en dos fases, retencion.
 #
 # sourced by ./ut; expects $TSV, $DST set by the entrypoint.
 # depends on lib-ut/changelog.sh (log_change), lib-ut/query.sh (repo_dir,
-# repos_for_target), lib-ut/status.sh (_repo_is_dirty).
+# repos_for_target).
 
 # ---------------------------------------------------------------------------
 # _distribute_remote_cmd <repo> <do_install>
@@ -126,27 +118,13 @@ _distribute_one() {
 }
 
 # ---------------------------------------------------------------------------
-# _local_repo_names -- imprime los repos clonados localmente (uno por linea).
-#   Standard location: scan $DST. Alternate: cualquier repos.tsv con path.
-# ---------------------------------------------------------------------------
-_local_repo_names() {
-    {
-        if [ -d "$DST" ]; then
-            ( cd "$DST" && for _d in */; do
-                _d="${_d%/}"
-                [ -d "$_d/.git" ] && printf '%s\n' "$_d"
-            done )
-        fi
-        awk -F'\t' 'NR>1 && $6 != "" {print $1}' "$TSV" | while IFS= read -r _r; do
-            [ -z "$_r" ] && continue
-            _p="$(repo_dir "$_r")"
-            [ -d "$_p/.git" ] && printf '%s\n' "$_r"
-        done
-    } | sort -u
-}
-
-# ---------------------------------------------------------------------------
-# cmd_distribute [--install] [--mix|--quiet|--panes] <repo|all>
+# cmd_distribute [--install] [--mix|--quiet|--panes] <repo>
+#
+# Un solo repo por invocacion. No hay "distribute all": si el usuario
+# tiene varios repos, los nombra explicitos o arma un loop en su shell.
+# Un fan-out implicito a N repos multiplica el blast radius sin aviso y
+# no se puede revisar sin inundar el terminal (con 100 repos, 100
+# install.sh por nodo). La politica es: una decision, un comando.
 # ---------------------------------------------------------------------------
 cmd_distribute() {
     _install=0
@@ -161,53 +139,15 @@ cmd_distribute() {
         esac
     done
     _repo="${1:-}"
-    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--mix|--quiet|--panes] <repo|all>"
+    [ -z "$_repo" ] && die "usage: ut distribute [--install] [--mix|--quiet|--panes] <repo>"
 
-    # Si el invocador no fijo modo, no elegimos uno: dejamos que nya lo
-    # haga con su auto-deteccion ($CLIPSO_ACTIVE + $TMUX + TTY).
-    _mode_arg=""
-    [ -n "$_mode" ] && _mode_arg="--mode $_mode"
-
-    if [ "$_repo" != "all" ]; then
-        # shellcheck disable=SC2086
-        _distribute_one "$_repo" "$_install" "${_mode:-auto}" || return 1
-        ok "distribute complete"
-        return 0
+    if [ "$_repo" = "all" ]; then
+        die "ut distribute all fue eliminado. Nombra cada repo explicito:
+  ut distribute <repo1> && ut distribute <repo2>
+El fan-out implicito multiplica el blast radius sin aviso."
     fi
 
-    # distribute all toca solo repos core-tagged.
-    _skipped=$(mktemp); : > "$_skipped"
-    _ok=$(mktemp); : > "$_ok"
-    _corelist=$(mktemp); repos_for_target core | sort -u > "$_corelist"
-    while IFS= read -r _r <&3; do
-        [ -z "$_r" ] && continue
-        grep -qxF "$_r" "$_corelist" || continue
-        _target="$(repo_dir "$_r")"
-        _reason=$(_repo_is_dirty "$_target") && {
-            warn "$_r  skipped: $_reason"
-            printf '%s\n' "$_r" >> "$_skipped"
-            continue
-        }
-        if [ "$_install" = "1" ]; then
-            info "cmd: ut distribute --install $_r"
-        else
-            info "cmd: ut distribute $_r"
-        fi
-        if _distribute_one "$_r" "$_install" "${_mode:-auto}"; then
-            printf '%s\n' "$_r" >> "$_ok"
-        else
-            warn "$_r  skipped: distribute failed"
-            printf '%s\n' "$_r" >> "$_skipped"
-        fi
-    done 3< <(_local_repo_names)
-    rm -f "$_corelist"
-    _nok=$(wc -l < "$_ok" | tr -d ' ')
-    _nskip=$(wc -l < "$_skipped" | tr -d ' ')
-    rm -f "$_ok" "$_skipped"
-    if [ "$_install" = "1" ]; then
-        bold "distribute all --install (core only): $_nok ok, $_nskip skipped"
-    else
-        bold "distribute all (core only): $_nok ok, $_nskip skipped"
-    fi
+    _distribute_one "$_repo" "$_install" "${_mode:-auto}" || return 1
+    ok "distribute complete"
     return 0
 }

@@ -168,19 +168,3 @@ cloud_snapshot() {
         2>/dev/null | sort -u > "$1"
 }
 
-# ── repo cleanliness check (used by distribute all) ───────────────────────
-#  _repo_is_dirty <target> -- prints reason if dirty/unmerged, empty if clean
-_repo_is_dirty() {
-    _t="$1"
-    _others=$(git -C "$_t" branch --format='%(refname:short)' 2>/dev/null | grep -v '^main$' || true)
-    _dirty=$(git -C "$_t" status --short 2>/dev/null)
-    if [ -n "$_others" ]; then
-        printf 'unmerged branch(es): %s' "$(printf '%s' "$_others" | tr '\n' ',' | sed 's/,$//')"
-        return 0
-    fi
-    if [ -n "$_dirty" ]; then
-        printf 'dirty working tree'
-        return 0
-    fi
-    return 1
-}
