@@ -68,3 +68,4 @@ dicmuu	tool,cli,sec,util	Dictionary generator and mutator -- Python orchestrator
 nodorin	util,infra,core	Multi-platform node bootstrap: Termux (runit) + Debian (systemd) + shared tools	active	catwilo	
 kya	tool	canonical LLM content manager: contract, conventions, agents, skills	active	catwilo	
 nya	tool	node orchestrator: fan-out, exec, transfer, clip across nodes	active	catwilo	
+kura	tool util net infra core	gestor distribuido de archivos content-addressed	active	catwilo	
