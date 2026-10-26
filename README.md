@@ -23,7 +23,9 @@ already-cloned repo. Idempotent.
 
     ut <command> [args]
 
-Run `ut` without args for the full command list with descriptions.
+Run `ut` without args, or `ut -h` / `ut --help`, for the canonical
+command list with descriptions. This README documents the intent and the
+conventions; `--help` is the reference for exact flags and arguments.
 
 ### Read (all repos)
 
@@ -31,9 +33,9 @@ Run `ut` without args for the full command list with descriptions.
     ut list <tag>              filter by tag
     ut list local              cloned repos (any path: $DST or custom)
     ut list cloud              only repos that exist on GitHub
+    ut list shared             repos on GitHub shared with the user (collaborator)
     ut list orphans            local clones not in repos.tsv
     ut status                  git state per repo (dirty/ahead/behind/branch)
-    ut status                  same + reachability check to each node
     ut diff                    uncommitted changes across all repos
     ut fetch                   fetch all remotes
 
