@@ -203,6 +203,17 @@ cmd_ship() {
     git -C "$_target" push origin main || die "push failed"
     info "deleting branch $_branch..."
     git -C "$_target" branch -d "$_branch" && ok "branch $_branch deleted"
+    # Delete the remote branch on origin if it exists. ut branch never
+    # pushes, but the user may push manually to test on another node
+    # before ship; that remote branch must not outlive the merge.
+    if git -C "$_target" rev-parse --verify "origin/$_branch" >/dev/null 2>&1; then
+        info "deleting remote branch origin/$_branch..."
+        if git -C "$_target" push origin --delete "$_branch"; then
+            ok "remote branch origin/$_branch deleted"
+        else
+            warn "could not delete origin/$_branch -- delete manually: git -C $_target push origin --delete $_branch"
+        fi
+    fi
     ok "$_repo shipped to origin/main"
 }
 
