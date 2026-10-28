@@ -19,6 +19,29 @@ repo_state() {
     printf '%s %s %s %s %s %s\n' "$_br" "$_ah" "$_bh" "$_dt" "$_ut" "$_st"
 }
 
+# _status_node_drift <repo> <target> -- warn when a peer's last recorded
+# commit for <repo> differs from origin/main. Reads ~/.tasks/.ut-nodes/*.tsv
+# (one file per node, synced by miko). No SSH: the record is as fresh as the
+# peer's last miko sync. Silent when no drift.
+_status_node_drift() {
+    _snd_repo="$1"; _snd_target="$2"
+    _snd_dir="$HOME/.tasks/.ut-nodes"
+    [ -d "$_snd_dir" ] || return 0
+    _snd_origin="$(git -C "$_snd_target" rev-parse origin/main 2>/dev/null)" || return 0
+    [ -n "$_snd_origin" ] || return 0
+    _snd_me="$(_ut_node_alias)"
+    for _snd_file in "$_snd_dir"/*.tsv; do
+        [ -f "$_snd_file" ] || continue
+        _snd_node="$(basename "$_snd_file" .tsv)"
+        [ "$_snd_node" = "$_snd_me" ] && continue
+        _snd_last="$(awk -F'\t' -v r="$_snd_repo" '$1==r{last=$2} END{print last}' "$_snd_file")"
+        [ -n "$_snd_last" ] || continue
+        [ "$_snd_last" = "$_snd_origin" ] && continue
+        warn "  node $_snd_node: $_snd_repo at ${_snd_last:0:7}, origin/main ${_snd_origin:0:7}"
+    done
+    return 0
+}
+
 cmd_status() {
     # --remote is accepted as a no-op: the remote fetch/connectivity check
     # already runs unconditionally below. Kept for compatibility with the
@@ -56,6 +79,7 @@ cmd_status() {
             git -C "$target" branch -v --no-merged main 2>/dev/null
             git -C "$target" log --oneline -5 2>/dev/null
         } > "$_snap_dir/$repo/local" 2>/dev/null
+        _status_node_drift "$repo" "$target"
         _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
         if [ -f "$_devices" ]; then
             . "${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/core/blockdb.sh" 2>/dev/null || true

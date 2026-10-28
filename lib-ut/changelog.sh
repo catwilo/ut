@@ -43,12 +43,12 @@ check_stale() {
     _cs_repo="$1"
     _cs_target="$(repo_dir "$_cs_repo" 2>/dev/null)" || return 0
     [ -n "$_cs_target" ] && [ -e "$_cs_target/.git" ] || return 0
-    _cs_local="$(git -C "$_cs_target" rev-parse --short HEAD 2>/dev/null)" || return 0
+    _cs_local="$(git -C "$_cs_target" rev-parse HEAD 2>/dev/null)" || return 0
     _cs_alias="$(_ut_node_alias)"
     _cs_file="$HOME/.tasks/.ut-nodes/${_cs_alias}.tsv"
     [ -f "$_cs_file" ] || return 0
     _cs_last="$(awk -F'\t' -v r="$_cs_repo" '$1==r{last=$2} END{print last}' "$_cs_file")"
     [ -n "$_cs_last" ] || return 0
     [ "$_cs_last" = "$_cs_local" ] && return 0
-    warn "$_cs_repo: HEAD local $_cs_local difiere del ultimo registro $_cs_last -- pull --rebase a continuacion"
+    warn "$_cs_repo: HEAD local ${_cs_local:0:7} difiere del ultimo registro ${_cs_last:0:7} -- pull --rebase a continuacion"
 }
