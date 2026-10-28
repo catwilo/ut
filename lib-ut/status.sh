@@ -97,7 +97,11 @@ cmd_status() {
                 # it (sed always exits 0). Also strip the "[alias] " prefix
                 # that -m mix adds per line.
                 _nya_raw="$(mktemp)"
-                if nya -m mix "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" > "$_nya_raw" 2>/dev/null; then
+                # < /dev/null: nya/ssh inherits fd 0. Without it, the remote
+                # command drains the pipe feeding `while read repo` and the
+                # loop silently stops after the first repo in a multi-repo
+                # list.
+                if nya -m mix "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" < /dev/null > "$_nya_raw" 2>/dev/null; then
                     sed "s/^\[$alias\] //" "$_nya_raw" > "$_snap_dir/$repo/$alias"
                 else
                     sed "s/^\[$alias\] //" "$_nya_raw" > "$_snap_dir/$repo/$alias"

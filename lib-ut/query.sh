@@ -53,16 +53,19 @@ repos_for_target() {
     case "$_target" in
         *,*)
             _seen=$(mktemp)
+            # Split once under IFS=',' with set --, then iterate "$@" after
+            # restoring IFS. The previous in-loop `IFS="$_oldifs"` broke the
+            # for's word-splitting from the second iteration on: it would
+            # treat "repo2,repo3" as one token and die.
             _oldifs="$IFS"; IFS=','
-            for _one in $_target; do
-                IFS="$_oldifs"
+            set -- $_target
+            IFS="$_oldifs"
+            for _one in "$@"; do
                 [ -z "$_one" ] && continue
                 repos_for_target "$_one" | while IFS= read -r _r; do
                     grep -qxF "$_r" "$_seen" 2>/dev/null || { printf '%s\n' "$_r"; printf '%s\n' "$_r" >> "$_seen"; }
                 done
-                IFS=','
             done
-            IFS="$_oldifs"
             rm -f "$_seen"
             return
             ;;
