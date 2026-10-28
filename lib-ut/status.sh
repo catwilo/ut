@@ -80,7 +80,7 @@ cmd_status() {
             git -C "$target" log --oneline -5 2>/dev/null
         } > "$_snap_dir/$repo/local" 2>/dev/null
         _status_node_drift "$repo" "$target"
-        _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/devices.db"
+        _devices="${NOEMAP_HOME:-$HOME/.local/share/nina}/state/ts-devices.db"
         if [ -f "$_devices" ]; then
             . "${NOEMAP_HOME:-$HOME/.local/share/nina}/lib/core/blockdb.sh" 2>/dev/null || true
             # Aliases come from fd 3, not fd 0: the remote command
@@ -93,11 +93,17 @@ cmd_status() {
                 ip="$(blockdb_field "$_mdblk" ip 2>/dev/null)"
                 is_local_ip "$ip" && continue
                 info "cmd: nya \"$alias\" \"cd ~/unix-toolkit-tools/$repo && git fetch --quiet origin && { git status --short; git branch -v --no-merged main; git log --oneline -5; } 2>/dev/null\""
-                if nya "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" > "$_snap_dir/$repo/$alias" 2>/dev/null; then
-                    :
+                # Capture rc of nya separately: piping into sed would mask
+                # it (sed always exits 0). Also strip the "[alias] " prefix
+                # that -m mix adds per line.
+                _nya_raw="$(mktemp)"
+                if nya -m mix "$alias" "cd ~/unix-toolkit-tools/$repo 2>/dev/null && git fetch --quiet origin 2>/dev/null && { git status --short 2>/dev/null; git branch -v --no-merged main 2>/dev/null; git log --oneline -5 2>/dev/null; }" > "$_nya_raw" 2>/dev/null; then
+                    sed "s/^\[$alias\] //" "$_nya_raw" > "$_snap_dir/$repo/$alias"
                 else
+                    sed "s/^\[$alias\] //" "$_nya_raw" > "$_snap_dir/$repo/$alias"
                     : > "$_snap_dir/$repo/$alias.unreach"
                 fi
+                rm -f "$_nya_raw"
             done 3< <(_devices_aliases "$_devices" 2>/dev/null)
         fi
         _state=$(repo_state "$target")
