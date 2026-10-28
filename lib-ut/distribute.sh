@@ -43,6 +43,18 @@ _distribute_remote_cmd() {
     printf 'fi\n'
     printf 'cd "$rpath"\n'
     printf 'git pull --rebase origin main\n'
+    # Record this node's post-pull HEAD in its own .ut-nodes/<alias>.tsv.
+    # Inline (no new ut subcommand): resolves alias from the node's own
+    # nina status and appends. Never fails the worker. The nested printf
+    # is kept flat by pre-computing HEAD and timestamp into shell vars.
+    printf 'if [ -d "$HOME/.tasks" ]; then\n'
+    printf '  _ut_a="$(nina status 2>/dev/null | sed -n 1p | cut -d" " -f1)"\n'
+    printf '  [ -n "$_ut_a" ] || _ut_a="$(hostname 2>/dev/null || echo unknown)"\n'
+    printf '  mkdir -p "$HOME/.tasks/.ut-nodes"\n'
+    printf '  _ut_h="$(git rev-parse HEAD)"\n'
+    printf '  _ut_t="$(date +%%s)"\n'
+    printf '  printf "%%s\\t%%s\\t%%s\\n" "%s" "$_ut_h" "$_ut_t" >> "$HOME/.tasks/.ut-nodes/$_ut_a.tsv" 2>/dev/null || true\n' "$_drc_repo"
+    printf 'fi\n'
 
     if [ "$_drc_install" = "1" ]; then
         printf 'if [ -f install.sh ]; then\n'

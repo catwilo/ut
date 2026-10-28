@@ -214,6 +214,7 @@ cmd_ship() {
             warn "could not delete origin/$_branch -- delete manually: git -C $_target push origin --delete $_branch"
         fi
     fi
+    log_node_state "$_repo"
     ok "$_repo shipped to origin/main"
 }
 
@@ -257,9 +258,12 @@ cmd_branch() {
         _base_ref="main"
         info "origin/$_cur_branch not found -- rebasing against origin/main"
     fi
+    git -C "$_target" fetch --quiet origin || true
+    check_stale "$_repo"
     if ! git -C "$_target" pull --rebase origin "$_base_ref"; then
         die "pull --rebase failed on $_repo"
     fi
+    log_node_state "$_repo"
     ok "pulled $_base_ref"
     git -C "$_target" checkout -b "$_name" || die "checkout -b failed"
     ok "on branch $_name"
