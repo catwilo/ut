@@ -14,10 +14,16 @@ log_change() {
 }
 
 #  _ut_node_alias -- local node alias from nina status (first line, field 1).
-#  Fallback: hostname. Never fails.
+#
+#  Empty when nina is unavailable or emits no usable line. Callers MUST
+#  skip writing the .ut-nodes manifest in that case: the previous
+#  `|| hostname` fallback silently created a.tsv / localhost.tsv, so a
+#  broken nina produced orphan manifests that no reader can match to a
+#  node. Recording nothing is correct; recording under a made-up name is
+#  not.
 _ut_node_alias() {
-    _una="$(nina status 2>/dev/null | awk 'NR==1 && NF>=4 {print $1; exit}')"
-    printf '%s\n' "${_una:-$(hostname 2>/dev/null || echo unknown)}"
+    _una="$(nina status 2>/dev/null | awk 'NR==1 && NF>=4 && $1 != "-" {print $1; exit}')"
+    printf '%s\n' "${_una:-}"
 }
 
 #  log_node_state <repo> -- record this node's current HEAD of <repo> in
@@ -30,6 +36,10 @@ log_node_state() {
     [ -n "$_lns_target" ] && [ -e "$_lns_target/.git" ] || return 0
     _lns_commit="$(git -C "$_lns_target" rev-parse HEAD 2>/dev/null)" || return 0
     _lns_alias="$(_ut_node_alias)"
+    if [ -z "$_lns_alias" ]; then
+        warn "ut: cannot resolve local node alias (nina status failed) -- manifest not updated"
+        return 0
+    fi
     mkdir -p "$HOME/.tasks/.ut-nodes"
     printf '%s\t%s\t%s\n' "$_lns_repo" "$_lns_commit" "$(date +%s)" \
         >> "$HOME/.tasks/.ut-nodes/${_lns_alias}.tsv"
@@ -45,6 +55,7 @@ check_stale() {
     [ -n "$_cs_target" ] && [ -e "$_cs_target/.git" ] || return 0
     _cs_local="$(git -C "$_cs_target" rev-parse HEAD 2>/dev/null)" || return 0
     _cs_alias="$(_ut_node_alias)"
+    [ -n "$_cs_alias" ] || return 0
     _cs_file="$HOME/.tasks/.ut-nodes/${_cs_alias}.tsv"
     [ -f "$_cs_file" ] || return 0
     _cs_last="$(awk -F'\t' -v r="$_cs_repo" '$1==r{last=$2} END{print last}' "$_cs_file")"

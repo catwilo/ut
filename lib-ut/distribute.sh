@@ -49,11 +49,14 @@ _distribute_remote_cmd() {
     # is kept flat by pre-computing HEAD and timestamp into shell vars.
     printf 'if [ -d "$HOME/.tasks" ]; then\n'
     printf '  _ut_a="$(nina status 2>/dev/null | sed -n 1p | cut -d" " -f1)"\n'
-    printf '  [ -n "$_ut_a" ] || _ut_a="$(hostname 2>/dev/null || echo unknown)"\n'
-    printf '  mkdir -p "$HOME/.tasks/.ut-nodes"\n'
-    printf '  _ut_h="$(git rev-parse HEAD)"\n'
-    printf '  _ut_t="$(date +%%s)"\n'
-    printf '  printf "%%s\\t%%s\\t%%s\\n" "%s" "$_ut_h" "$_ut_t" >> "$HOME/.tasks/.ut-nodes/$_ut_a.tsv" 2>/dev/null || true\n' "$_drc_repo"
+    printf '  # No hostname fallback: a made-up alias (a, localhost) creates an\n'
+    printf '  # orphan manifest no reader can match. Skip instead.\n'
+    printf '  if [ -n "$_ut_a" ] && [ "$_ut_a" != "-" ]; then\n'
+    printf '    mkdir -p "$HOME/.tasks/.ut-nodes"\n'
+    printf '    _ut_h="$(git rev-parse HEAD)"\n'
+    printf '    _ut_t="$(date +%%s)"\n'
+    printf '    printf "%%s\\t%%s\\t%%s\\n" "%s" "$_ut_h" "$_ut_t" >> "$HOME/.tasks/.ut-nodes/$_ut_a.tsv" 2>/dev/null || true\n' "$_drc_repo"
+    printf '  fi\n'
     printf 'fi\n'
 
     if [ "$_drc_install" = "1" ]; then
