@@ -23,6 +23,9 @@ _tsv_publish() {
     else
         err "repos.tsv push failed -- see error above; push manually: git -C \"$_p_dir\" push origin main"
     fi
+    # Registry changed: rebuild the path cache so later lookups in the same
+    # process see the new rows.
+    _tsv_reload
 }
 
 # cmd_create -- alias of cmd_new. Both names work; cmd_new is the single

@@ -6,15 +6,43 @@
 # if tag given: only that tag
 #  repos_all -- print all repo names from TSV, no filtering
 
+# ---------------------------------------------------------------------------
+# TSV path cache: one pass at startup, O(1) lookups afterwards.
+#
+# repo_dir used to awk the whole TSV on every call. Any loop over R repos
+# was O(R*N); with every repo touched that is O(N^2). The cache is loaded
+# lazily on first use and rebuilt by _tsv_reload, which _tsv_publish calls
+# after a registry mutation. Commands that mutate and then resolve a path
+# (delete, rename) resolve BEFORE publishing, so they read the pre-mutation
+# cache -- which is exactly the path they need to move or trash.
+# ---------------------------------------------------------------------------
+declare -A _UT_TSV_PATH=()
+_UT_TSV_LOADED=0
+
+_ut_tsv_load() {
+    _UT_TSV_PATH=()
+    [ -f "$TSV" ] || { _UT_TSV_LOADED=1; return 0; }
+    local _n _t _d _s _o _p _tool
+    while IFS=$'\t' read -r _n _t _d _s _o _p _tool; do
+        [ -z "$_n" ] && continue
+        case "$_n" in \#*) continue ;; esac
+        _UT_TSV_PATH["$_n"]="$_p"
+    done < "$TSV"
+    _UT_TSV_LOADED=1
+}
+
+# _tsv_reload -- drop and rebuild the path cache. Called by _tsv_publish.
+_tsv_reload() { _UT_TSV_LOADED=0; _ut_tsv_load; }
+
 # repo_dir <repo> -- resolve the on-disk path for a repo.
-# Reads column 6 of repos.tsv ("path"). Empty/missing column means the
-# standard location ($DST/<repo>). This is the single source of truth for
-# locating a repo; callers must use this and never interpolate $DST
-# directly (ut#repo-dir).
+# Column 6 of repos.tsv ("path") when it exists on disk, otherwise the
+# standard location ($DST/<repo>). Single source of truth for locating a
+# repo; callers must use this and never interpolate $DST directly.
 repo_dir() {
     _rd_repo="$1"
     [ -z "$_rd_repo" ] && { err "repo_dir: empty repo"; return 1; }
-    _rd_path=$(awk -F'\t' -v r="$_rd_repo" '$1==r {print $6; exit}' "$TSV")
+    [ "$_UT_TSV_LOADED" -eq 1 ] || _ut_tsv_load
+    _rd_path="${_UT_TSV_PATH[$_rd_repo]:-}"
     # The path column is written on the machine that first registered the
     # repo. repos.tsv travels by git to every node, so on a different
     # platform (Termux absolute paths carried to Debian) that stored path
