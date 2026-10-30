@@ -123,6 +123,19 @@ cmd_status() {
                 [ -n "$_mdblk" ] || continue
                 ip="$(blockdb_field "$_mdblk" ip 2>/dev/null)"
                 is_local_ip "$ip" && continue
+                # Manifest short-circuit: if the peer's last recorded
+                # commit for <repo> equals origin/main, the peer is in
+                # sync as of its last miko sync. Skip the SSH round-trip.
+                # No entry in the .tsv (fresh peer, repo never touched
+                # there) falls through to the live SSH check below.
+                _mfs_origin="$(git -C "$target" rev-parse origin/main 2>/dev/null || true)"
+                _mfs_tsv="$HOME/.tasks/.ut-nodes/$alias.tsv"
+                _mfs_last=""
+                [ -f "$_mfs_tsv" ] && _mfs_last="$(awk -F'\t' -v r="$repo" '$1==r{last=$2} END{print last}' "$_mfs_tsv" 2>/dev/null)"
+                if [ -n "$_mfs_origin" ] && [ -n "$_mfs_last" ] && [ "$_mfs_last" = "$_mfs_origin" ]; then
+                    ok "  node $alias: in sync (manifest)"
+                    continue
+                fi
                 info "cmd: nya \"$alias\" \"cd ~/unix-toolkit-tools/$repo && git fetch --quiet origin && { git status --short; git branch -v --no-merged main; git log --oneline -5; } 2>/dev/null\""
                 # Capture rc of nya separately: piping into sed would mask
                 # it (sed always exits 0). Also strip the "[alias] " prefix

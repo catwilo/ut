@@ -101,9 +101,11 @@ cmd_push() {
             git -C "$target" push && { ok "$repo pushed"; log_change "$repo" "push"; } || err "$repo — push failed"
         fi
     done
-    # post-push status report
+    # post-push status report, scoped to the same target that was pushed.
+    # With the new default (empty = touched repos), leaving this bare
+    # would show a different set than the one just pushed.
     echo ""
-    cmd_status
+    cmd_status "$_tag"
 }
 
 cmd_run() {

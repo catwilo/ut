@@ -17,16 +17,19 @@
 # cache -- which is exactly the path they need to move or trash.
 # ---------------------------------------------------------------------------
 declare -A _UT_TSV_PATH=()
+declare -A _UT_TSV_STATE=()
 _UT_TSV_LOADED=0
 
 _ut_tsv_load() {
     _UT_TSV_PATH=()
+    _UT_TSV_STATE=()
     [ -f "$TSV" ] || { _UT_TSV_LOADED=1; return 0; }
     local _n _t _d _s _o _p _tool
     while IFS=$'\t' read -r _n _t _d _s _o _p _tool; do
         [ -z "$_n" ] && continue
         case "$_n" in \#*) continue ;; esac
         _UT_TSV_PATH["$_n"]="$_p"
+        _UT_TSV_STATE["$_n"]="$_s"
     done < "$TSV"
     _UT_TSV_LOADED=1
 }
@@ -71,12 +74,48 @@ repos_active() {
     done
 }
 
-#  repos_for_target -- repo names filtered by tag, or active repos if no tag given
+#  repos_touched -- union of every alias present in ~/.tasks/.ut-nodes/*.tsv,
+#  intersected with the active rows of repos.tsv. That manifest is written by
+#  ut ship / branch / distribute on every node and propagated through miko
+#  sync, so it is the set of repos this ecosystem actually worked on. Using
+#  it as the default scope keeps ut status/sync/push/diff O(touched), not
+#  O(registered).
+repos_touched() {
+    _rt_dir="$HOME/.tasks/.ut-nodes"
+    [ -d "$_rt_dir" ] || return 0
+    [ "$_UT_TSV_LOADED" -eq 1 ] || _ut_tsv_load
+    cat "$_rt_dir"/*.tsv 2>/dev/null | cut -f1 | sort -u | while IFS= read -r _rt_r; do
+        [ -z "$_rt_r" ] && continue
+        [ "${_UT_TSV_STATE[$_rt_r]:-}" = "active" ] || continue
+        printf '%s\n' "$_rt_r"
+    done
+}
+
+#  repos_for_target -- resolve a target to repo names.
+#
+#  Empty target   -> repos_touched (manifest). Falls back to repos_active
+#                    with a warning when the manifest is empty, so a fresh
+#                    node is not stuck with an empty scope.
+#  "--all"        -> repos_active (the full registry). Explicit opt-in to
+#                    O(registered) work; never the default.
+#  "a,b,c"        -> union of the three.
+#  tag or repo    -> as before.
 repos_for_target() {
     _target="${1:-}"
     if [ -z "$_target" ]; then
+        _touched="$(repos_touched)"
+        if [ -n "$_touched" ]; then
+            printf '%s\n' "$_touched"
+            return 0
+        fi
+        warn "ut: no .ut-nodes manifest entries -- using all active repos"
+        warn "ut: run any ut branch/ship/distribute <repo> to populate it"
         repos_active
-        return
+        return 0
+    fi
+    if [ "$_target" = "--all" ]; then
+        repos_active
+        return 0
     fi
     case "$_target" in
         *,*)
