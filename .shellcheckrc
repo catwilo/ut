@@ -1,0 +1,8 @@
+# ShellCheck disables justificados.
+# SC1083: `@{u}..HEAD` es sintaxis literal de git rev-list. Las llaves
+#   son parte de la expresion de git, no de shell; shellcheck las marca
+#   como "literal" porque no las reconoce como sintaxis shell.
+disable=SC1083
+# SC1091: source con ruta dinamica (lib/core/blockdb.sh de nina, resuelto
+#   en runtime via NOEMAP_HOME). shellcheck no puede seguirla.
+disable=SC1091

@@ -51,7 +51,38 @@ cmd_status() {
     esac
     info "cmd: git -C \"$(dirname "$TSV")\" pull --rebase origin main"
     if [ -d "$(dirname "$TSV")/.git" ]; then
-        git -C "$(dirname "$TSV")" pull --rebase origin main >/dev/null 2>&1 || true
+        if ! git -C "$(dirname "$TSV")" pull --rebase origin main >/dev/null 2>&1; then
+            warn "ut: pull of repos.tsv registry failed -- drift info may be stale"
+        fi
+    fi
+    # Manifest pull: .ut-nodes/<alias>.tsv is written per node and
+    # propagated through miko sync. Without this pull, a peer's fresh
+    # state stays invisible until the next `miko sync` on this node.
+    # Autostash: the local node usually has an uncommitted .ut-nodes edit
+    # (its own latest state). git pull --rebase refuses to run with
+    # unstaged changes; stash, pull, pop mirrors cmd_branch.
+    if [ -d "$HOME/.tasks/.git" ]; then
+        info "cmd: git -C ~/.tasks pull --rebase origin main"
+        _st_tasks=0
+        if [ -n "$(git -C "$HOME/.tasks" status --short 2>/dev/null)" ]; then
+            if git -C "$HOME/.tasks" stash push -q -m "ut-status-autostash-$$" 2>/dev/null; then
+                _st_tasks=1
+            fi
+        fi
+        if ! git -C "$HOME/.tasks" pull --rebase origin main >/dev/null 2>&1; then
+            warn "ut: pull of ~/.tasks failed -- node manifest may be stale"
+        fi
+        if [ "$_st_tasks" -eq 1 ]; then
+            git -C "$HOME/.tasks" stash pop -q 2>/dev/null || \
+                warn "ut: autostash pop of ~/.tasks conflicted -- resolve manually"
+        fi
+        # Local .ut-nodes/*.tsv changes not yet committed mean this node
+        # recorded state that has not reached the others. Surface it: a
+        # silent local edit is exactly the hole that hid tx2's manifest.
+        if [ -d "$HOME/.tasks/.ut-nodes" ] && \
+           [ -n "$(git -C "$HOME/.tasks" status --short -- .ut-nodes/ 2>/dev/null)" ]; then
+            warn "ut: local .ut-nodes changes not propagated -- run: miko sync"
+        fi
     fi
     _tag="${1:-}"
     _tmp=$(mktemp); printf "0 0\n" > "$_tmp"
