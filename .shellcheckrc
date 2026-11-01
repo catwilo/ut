@@ -6,3 +6,20 @@ disable=SC1083
 # SC1091: source con ruta dinamica (lib/core/blockdb.sh de nina, resuelto
 #   en runtime via NOEMAP_HOME). shellcheck no puede seguirla.
 disable=SC1091
+# SC1090: source con variable en el path (lib-ut/*.sh loop del entrypoint).
+#   Mismo caso que SC1091: la ruta se resuelve en runtime.
+disable=SC1090
+# SC2016: strings en comillas simples que se envian LITERALES al nodo
+#   remoto via printf en distribute.sh. Expandirlos localmente romperia
+#   el comando remoto: la variable debe expandirse alla, no aca.
+disable=SC2016
+# SC2086: word-splitting deliberado en query.sh:128 (`set -- $_target`
+#   para splitear un CSV por coma). Los elementos ya vienen filtrados.
+disable=SC2086
+# SC2329: funciones invocadas via trap (EXIT/INT/TERM). shellcheck no
+#   puede ver el trap como invocacion.
+disable=SC2329
+# SC2034: globals definidos en el entrypoint (ut) y leidos en lib-ut/*.sh.
+#   shellcheck analiza cada archivo aislado y no ve el uso cruzado.
+#   Justificado por la arquitectura source-based del proyecto.
+disable=SC2034

@@ -20,29 +20,36 @@ cmd_sync() {
     gh auth status >/dev/null 2>&1 || die "gh not authenticated — run: gh auth login"
     mkdir -p "$DST"
     errors=0
-    repos_for_target "$_tag" | while IFS= read -r repo; do
+    while IFS= read -r repo; do
         [ "$repo" = "unix-toolkit" ] && continue
         target="$(repo_dir "$repo")"
         if [ -e "$target/.git" ]; then
             info "cmd: git -C \"$target\" pull --rebase --autostash"
             if ! git -C "$target" pull --rebase --autostash 2>/dev/null; then
                 info "cmd: git -C \"$target\" branch --set-upstream-to=origin/main main"
-                git -C "$target" branch --set-upstream-to=origin/main main 2>/dev/null \
-                    && git -C "$target" pull --rebase --autostash 2>/dev/null \
-                    && ok "$repo updated" \
-                    || { err "$repo — pull failed"; errors=$((errors+1)); }
+                if git -C "$target" branch --set-upstream-to=origin/main main 2>/dev/null \
+                    && git -C "$target" pull --rebase --autostash 2>/dev/null; then
+                    ok "$repo updated"
+                else
+                    err "$repo — pull failed"; errors=$((errors+1))
+                fi
             else
                 ok "$repo updated"
             fi
         else
             _url="$(repo_url "$repo")"
             info "cmd: git clone $_url \"$target\""
-            git clone "$_url" "$target" \
-                && ok "$repo cloned" \
-                || { err "$repo — clone failed"; errors=$((errors+1)); }
+            if git clone "$_url" "$target"; then
+                ok "$repo cloned"
+            else
+                err "$repo — clone failed"; errors=$((errors+1))
+            fi
         fi
-    done
-    [ "$errors" -eq 0 ] && ok "all repos synced" || { err "$errors repo(s) failed"; exit 1; }
+    done < <(repos_for_target "$_tag")
+    if [ "$errors" -ne 0 ]; then
+        err "$errors repo(s) failed"; exit 1
+    fi
+    ok "all repos synced"
 }
 
 cmd_fetch() {
@@ -79,7 +86,10 @@ cmd_fetch() {
     _errors=$(grep -c "^fail" "$_outfile" 2>/dev/null || true)
     _errors="${_errors:-0}"
     rm -f "$_errfile" "$_outfile"
-    [ "$_errors" -eq 0 ] && ok "all repos fetched" || { err "${_errors} repo(s) failed"; exit 1; }
+    if [ "$_errors" -ne 0 ]; then
+        err "${_errors} repo(s) failed"; exit 1
+    fi
+    ok "all repos fetched"
 }
 
 cmd_push() {
@@ -89,7 +99,11 @@ cmd_push() {
     _ahead=$(git -C "$_self" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
     if [ "$_ahead" -gt 0 ]; then
         info "ut — pushing $_ahead commit(s)..."
-        git -C "$_self" push && { ok "ut pushed"; log_change "ut" "push"; } || err "ut — push failed"
+        if git -C "$_self" push; then
+            ok "ut pushed"; log_change "ut" "push"
+        else
+            err "ut — push failed"
+        fi
     fi
     # push all tool repos
     repos_for_target "$_tag" | while IFS= read -r repo; do
@@ -98,7 +112,11 @@ cmd_push() {
         _ahead=$(git -C "$target" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
         if [ "$_ahead" -gt 0 ]; then
             info "$repo — pushing $_ahead commit(s)..."
-            git -C "$target" push && { ok "$repo pushed"; log_change "$repo" "push"; } || err "$repo — push failed"
+            if git -C "$target" push; then
+                ok "$repo pushed"; log_change "$repo" "push"
+            else
+                err "$repo — push failed"
+            fi
         fi
     done
     # post-push status report, scoped to the same target that was pushed.
@@ -149,7 +167,10 @@ cmd_clone() {
             errors=$((errors+1))
         fi
     done < <(_clone_list "$@")
-    [ "$errors" -eq 0 ] && ok "all repos cloned" || { err "$errors repo(s) failed"; exit 1; }
+    if [ "$errors" -ne 0 ]; then
+        err "$errors repo(s) failed"; exit 1
+    fi
+    ok "all repos cloned"
     printf '\n'; cmd_list local
 }
 
@@ -166,16 +187,18 @@ cmd_install() {
     mkdir -p "$DST"
     _url="$(repo_url "$_repo")"
     info "$_repo -- installing from cloud..."
-    git clone "$_url" "$target" \
-        && ok "$_repo installed to $target" \
-        || die "$_repo -- clone failed"
+    if git clone "$_url" "$target"; then
+        ok "$_repo installed to $target"
+    else
+        die "$_repo -- clone failed"
+    fi
     printf '\n'; cmd_list local
 }
 
 cmd_diff() {
     _tag="${1:-}"
     _found=0
-    repos_for_target "$_tag" | while IFS= read -r repo; do
+    while IFS= read -r repo; do
         target="$(repo_dir "$repo")"
         [ -e "$target/.git" ] || continue
         _dirty=$(git -C "$target" status --short 2>/dev/null)
@@ -184,7 +207,7 @@ cmd_diff() {
             git -C "$target" diff --stat
             _found=1
         fi
-    done
+    done < <(repos_for_target "$_tag")
     [ "$_found" -eq 0 ] && ok "no uncommitted changes"
 }
 

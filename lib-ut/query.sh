@@ -244,7 +244,7 @@ cmd_list() {
 }
 END {
     for (g = 1; g <= 4; g++) printf "%s", bucket[g]
-}' | while IFS=$'\001' read -r name tags desc state owner path tool; do
+}' | while IFS=$'\001' read -r name tags desc state _ _ tool; do
     [ -z "$name" ] && continue
     if [ -n "$_tag" ]; then
         case ",$tags," in

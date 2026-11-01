@@ -64,7 +64,7 @@ _gen_uuid() {
     elif command -v uuidgen >/dev/null 2>&1; then
         uuidgen
     else
-        printf '%s-%s-%s\n' "$(date +%s%N 2>/dev/null || date +%s)" "$$" "${RANDOM:-0}${RANDOM:-0}"
+        printf '%s-%s-%s\n' "$(date +%s%N 2>/dev/null || date +%s)" "$$" "$(awk 'BEGIN{srand(); print int(rand()*1000000)}')"
     fi
 }
 

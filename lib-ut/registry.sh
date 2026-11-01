@@ -110,7 +110,11 @@ cmd_unclone() {
             *) info "aborted"; return 0 ;;
         esac
     fi
-    maid trash "$target" && ok "$_repo removed locally (recoverable via maid restore) -- still in GitHub" || err "$_repo -- trash failed"
+    if maid trash "$target"; then
+        ok "$_repo removed locally (recoverable via maid restore) -- still in GitHub"
+    else
+        err "$_repo -- trash failed"
+    fi
 }
 
 # DEPRECATED: kept one cycle for backwards compatibility. Use 'ut unclone'.

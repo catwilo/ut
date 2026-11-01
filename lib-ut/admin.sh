@@ -99,8 +99,11 @@ cmd_new() {
         _wait_reachable "$_ip" "${_port:-22}" || { warn "$_alias -- skipped (unreachable)"; continue; }
         info "syncing $_repo -> $_alias..."
         _url="$(repo_url "$_repo")"
-        nya "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo" 2>/dev/null \
-            && ok "$_alias -- $_repo cloned" || err "$_alias -- clone failed"
+        if nya "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo" 2>/dev/null; then
+            ok "$_alias -- $_repo cloned"
+        else
+            err "$_alias -- clone failed"
+        fi
     done 3< <(_all_nodes_aliases)
     ok "$_repo distributed to all nodes"
 }
@@ -120,7 +123,11 @@ open(tsv, "w").writelines(lines)
 print(f"ok: {repo} removed from repos.tsv")
 PYEOF
     if [ -d "$(repo_dir "$_repo")" ]; then
-        maid trash "$(repo_dir "$_repo")" && ok "local clone moved to trash" || warn "maid trash failed — remove $(repo_dir "$_repo") manually"
+        if maid trash "$(repo_dir "$_repo")"; then
+            ok "local clone moved to trash"
+        else
+            warn "maid trash failed — remove $(repo_dir "$_repo") manually"
+        fi
     fi
     _tsv_publish "delete $_repo"
 }
@@ -153,7 +160,11 @@ PYEOF
     _old_path="$(repo_dir "$_old")"
     if [ -d "$_old_path" ]; then
         _new_path="$(dirname "$_old_path")/$_new"
-        mv "$_old_path" "$_new_path" && ok "local clone moved: $_old_path -> $_new_path" || warn "mv failed — move manually"
+        if mv "$_old_path" "$_new_path"; then
+            ok "local clone moved: $_old_path -> $_new_path"
+        else
+            warn "mv failed — move manually"
+        fi
         # Update column 6 to the new path so future repo_dir lookups work.
         python3 - "$TSV" "$_new" "$_new_path" << 'RPYEOF'
 import sys
@@ -172,7 +183,11 @@ for l in lines:
 open(tsv, "w").writelines(out)
 RPYEOF
         _url="$(repo_url "$_new")"
-        git -C "$_new_path" remote set-url origin "$_url" && ok "remote URL updated" || warn "remote URL update failed"
+        if git -C "$_new_path" remote set-url origin "$_url"; then
+            ok "remote URL updated"
+        else
+            warn "remote URL update failed"
+        fi
     fi
 
     _tsv_publish "rename $_old -> $_new"
@@ -195,7 +210,10 @@ _rename_propagate() {
         _wait_reachable "$_rp_ip" "${_rp_port:-22}" || { warn "$_rp_alias — skipped (unreachable)"; continue; }
         info "propagating rename to $_rp_alias..."
         _url="$(repo_url "$_rp_new")"
-        nya "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url" 2>/dev/null \
-            && ok "$_rp_alias — renamed" || warn "$_rp_alias — rename propagation failed"
+        if nya "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url" 2>/dev/null; then
+            ok "$_rp_alias — renamed"
+        else
+            warn "$_rp_alias — rename propagation failed"
+        fi
     done 3< <(_all_nodes_aliases)
 }
