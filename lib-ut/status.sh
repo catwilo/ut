@@ -242,7 +242,10 @@ cmd_status() {
 #  cloud_snapshot <outfile> -- write GitHub repo names to outfile
 #  used by health/status drift detection; empty file if gh unavailable
 cloud_snapshot() {
-    gh repo list "$GITHUB_USER" --limit 200 --json name --jq '.[].name' \
-        2>/dev/null | sort -u > "$1"
+    # Paginated: no limit means every owned repo is listed. `gh repo list
+    # --limit N` truncates silently once the account exceeds N, which would
+    # make drift detection lose repos without warning.
+    gh api --paginate "user/repos?per_page=100&affiliation=owner" \
+        --jq '.[].name' 2>/dev/null | sort -u > "$1"
 }
 

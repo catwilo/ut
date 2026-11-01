@@ -55,7 +55,9 @@ _distribute_remote_cmd() {
     printf '    mkdir -p "$HOME/.tasks/.ut-nodes"\n'
     printf '    _ut_h="$(git rev-parse HEAD)"\n'
     printf '    _ut_t="$(date +%%s)"\n'
-    printf '    printf "%%s\\t%%s\\t%%s\\n" "%s" "$_ut_h" "$_ut_t" >> "$HOME/.tasks/.ut-nodes/$_ut_a.tsv" 2>/dev/null || true\n' "$_drc_repo"
+    printf '    _ut_f="$HOME/.tasks/.ut-nodes/$_ut_a.tsv"\n'
+    printf '    [ -f "$_ut_f" ] && { awk -v r="%s" '"'"'$1 != r'"'"' "$_ut_f" > "$_ut_f.tmp" && mv -f "$_ut_f.tmp" "$_ut_f"; }\n' "$_drc_repo"
+    printf '    printf "%%s\\t%%s\\t%%s\\n" "%s" "$_ut_h" "$_ut_t" >> "$_ut_f" 2>/dev/null || true\n' "$_drc_repo"
     printf '  fi\n'
     printf 'fi\n'
 

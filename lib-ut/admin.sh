@@ -76,7 +76,8 @@ cmd_new() {
     fi
     ok "$_repo cloned to $_clone_root/$_repo"
     printf '# %s\n\n%s\n' "$_repo" "$_desc" > "$_clone_root/$_repo/README.md"
-    git -C "$_clone_root/$_repo" add README.md
+    printf '*.new\n*.bak\n' > "$_clone_root/$_repo/.gitignore"
+    git -C "$_clone_root/$_repo" add README.md .gitignore
     # --no-verify: this is the repo's first-ever commit, on main, before any
     # branch exists to receive the pre-commit hook -- the global hook blocks
     # direct commits on main/master, which would leave every new repo stuck

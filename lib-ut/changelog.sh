@@ -41,8 +41,17 @@ log_node_state() {
         return 0
     fi
     mkdir -p "$HOME/.tasks/.ut-nodes"
-    printf '%s\t%s\t%s\n' "$_lns_repo" "$_lns_commit" "$(date +%s)" \
-        >> "$HOME/.tasks/.ut-nodes/${_lns_alias}.tsv"
+    _lns_file="$HOME/.tasks/.ut-nodes/${_lns_alias}.tsv"
+    # Compact before append: drop this repo's previous entries, keep the rest.
+    # Readers take the last entry per repo (awk '$1==r{last=$2} END{print last}'),
+    # so dropping older rows is invisible to them; the file stops growing one
+    # row per ship/branch/distribute forever.
+    if [ -f "$_lns_file" ]; then
+        _lns_tmp="$(mktemp "${TMPDIR:-/tmp}/ut-nodes.XXXXXX")"
+        awk -v r="$_lns_repo" '$1 != r' "$_lns_file" > "$_lns_tmp" || true
+        mv -f "$_lns_tmp" "$_lns_file"
+    fi
+    printf '%s\t%s\t%s\n' "$_lns_repo" "$_lns_commit" "$(date +%s)" >> "$_lns_file"
 }
 
 #  check_stale <repo> -- warn if this node's HEAD for <repo> differs from
