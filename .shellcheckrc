@@ -23,3 +23,7 @@ disable=SC2329
 #   shellcheck analiza cada archivo aislado y no ve el uso cruzado.
 #   Justificado por la arquitectura source-based del proyecto.
 disable=SC2034
+# SC2317: "unreachable command" en el cuerpo de _restore_stash_on_exit,
+#   invocada via trap EXIT. shellcheck 0.10 no lo detecta como invocacion
+#   (0.11 lo reporta como SC2329, ya deshabilitado). Mismo falso positivo.
+disable=SC2317
