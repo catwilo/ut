@@ -34,6 +34,20 @@ _seed_empty_tsv() {
     [[ "$output" == *"--all"* ]]
 }
 
+@test "ut con UT_HOME sin repos.tsv: falla, no cae al registro del HOME" {
+    # Registro falso en el HOME que NO debe ser usado: UT_HOME es la
+    # fuente unica cuando esta seteado. El fallback silencioso al
+    # checkout del usuario violaria el aislamiento y usaria el
+    # registro real sin que el llamador lo sepa.
+    mkdir -p "$HOME/unix-toolkit-tools/ut"
+    printf 'name\ttags\tdesc\tstate\towner\tpath\nrealish\ttag\td\tactive\tu\t\n' > "$HOME/unix-toolkit-tools/ut/repos.tsv"
+    rm -f "$TSV"
+    run _ut list
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repos.tsv not found"* ]]
+    [[ "$output" != *"realish"* ]]
+}
+
 @test "ut sin repos.tsv: exit != 0 con mensaje" {
     rm -f "$TSV"
     run _ut list

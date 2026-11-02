@@ -22,12 +22,18 @@ bold() { printf "${B}%s${Z}\n" "$*"; }
 
 GITHUB_USER="catwilo"
 DST="${UNIX_TOOLKIT_TOOLS:-$HOME/unix-toolkit-tools}"
-TSV="${UT_HOME:-$(dirname "$(realpath "$0")")}/repos.tsv"
-[ -f "$TSV" ] || TSV="$HOME/unix-toolkit-tools/ut/repos.tsv"
+# UT_HOME explicito es la fuente unica: si esta seteado, el TSV vive
+# ahi y NO hay fallback (el fallback silencioso ignoraria la intencion
+# del llamador y usaria el registro real). Sin UT_HOME, se resuelve
+# desde el directorio del binario con fallback al checkout por defecto.
+if [ -n "${UT_HOME:-}" ]; then
+    TSV="$UT_HOME/repos.tsv"
+else
+    TSV="$(dirname "$(realpath "$0")")/repos.tsv"
+    [ -f "$TSV" ] || TSV="$HOME/unix-toolkit-tools/ut/repos.tsv"
+fi
 
 die() { err "$*"; exit 1; }
-
-[ -f "$TSV" ] || die "repos.tsv not found at $TSV"
 
 LIB_UT="$(dirname "$(realpath "$0")")/lib-ut"
 for _lib in changelog query status sync registry admin nodes distribute identity; do
@@ -125,6 +131,10 @@ print_help() {
 }
 
 [ -z "$CMD" ] && { print_help; exit 0; }
+
+# help/-h/--help ya salieron arriba: solo los comandos reales llegan aqui
+# y todos ellos leen o escriben repos.tsv.
+[ -f "$TSV" ] || die "repos.tsv not found at $TSV"
 
 case "$CMD" in
     new)      cmd_new      "$@" ;;
