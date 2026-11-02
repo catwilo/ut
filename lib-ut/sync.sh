@@ -134,7 +134,6 @@ cmd_push() {
     if [ -n "$_pairs" ]; then
         printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
             _r="${1%%	*}"; _rest="${1#*	}"; _p="${_rest%%	*}"; _a="${_rest#*	}"
-            info "$_r — pushing $_a commit(s)..."
             if git -C "$_p" push >/dev/null 2>&1; then
                 printf "ok\\t%s\\n" "$_r"
             else
@@ -199,8 +198,11 @@ cmd_clone() {
     _clone_pairs=$(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="clone"')
     if [ -n "$_clone_pairs" ]; then
         printf '%s\n' "$_clone_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
-            _r="${1#clone	}"; _r="${_r%%	*}"
-            _rest="${1#*	}"; _p="${_rest%%	*}"; _u="${_rest#*	}"
+            _rest="${1#*	}"
+            _r="${_rest%%	*}"
+            _rest="${_rest#*	}"
+            _p="${_rest%%	*}"
+            _u="${_rest#*	}"
             if git clone "$_u" "$_p" >/dev/null 2>&1; then
                 printf "ok\\t%s\\n" "$_r"
             else

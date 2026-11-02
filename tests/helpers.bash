@@ -42,6 +42,16 @@ setup_env() {
 exit 0
 FAKE_NINA
     chmod +x "$BIN/nina"
+
+    # gh stub: cmd_sync y cmd_clone exigen 'gh auth status' como
+    # precondicion. Sin stub, el binario real falla en el HOME aislado
+    # (no hay credenciales) y los tests no pueden ejercitar el fan-out.
+    cat > "$BIN/gh" <<'FAKE_GH'
+#!/usr/bin/env bash
+exit 0
+FAKE_GH
+    chmod +x "$BIN/gh"
+
     export PATH="$BIN:$PATH"
 
     # Replicar el contexto que el entrypoint ut construye antes de sourcear
