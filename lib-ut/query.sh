@@ -16,8 +16,11 @@
 # (delete, rename) resolve BEFORE publishing, so they read the pre-mutation
 # cache -- which is exactly the path they need to move or trash.
 # ---------------------------------------------------------------------------
-declare -A _UT_TSV_PATH=()
-declare -A _UT_TSV_STATE=()
+# declare -gA: los arrays deben ser globales aunque el modulo se sourcee
+# desde dentro de una funcion (tests, otros consumidores). Un declare -A
+# simple crearia variables locales al llamador y se perderian al salir.
+declare -gA _UT_TSV_PATH=()
+declare -gA _UT_TSV_STATE=()
 _UT_TSV_LOADED=0
 
 _ut_tsv_load() {
