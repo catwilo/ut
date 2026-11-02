@@ -87,25 +87,16 @@ cmd_new() {
     git -C "$_clone_root/$_repo" push -u origin main || git -C "$_clone_root/$_repo" push -u origin master || warn "push failed -- run manually"
     ok "initial commit pushed"
 
-    _devices="$(_nodes_db)"
-    [ -f "$_devices" ] || { warn "device table not found, skipping remote sync"; return 0; }
-    while IFS= read -r _alias; do
-        [ -z "$_alias" ] && continue
-        _blk="$(blockdb_get "$_devices" alias "$_alias")"
-        [ -n "$_blk" ] || continue
-        _ip="$(blockdb_field "$_blk" ip)"
-        _port="$(blockdb_field "$_blk" port)"
-        is_local_ip "$_ip" && continue
-        _wait_reachable "$_ip" "${_port:-22}" || { warn "$_alias -- skipped (unreachable)"; continue; }
-        info "syncing $_repo -> $_alias..."
-        _url="$(repo_url "$_repo")"
-        if nya "$_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo" 2>/dev/null; then
-            ok "$_alias -- $_repo cloned"
-        else
-            err "$_alias -- clone failed"
-        fi
-    done 3< <(_all_nodes_aliases)
-    ok "$_repo distributed to all nodes"
+    # Fan-out delegado a nya @all: nya ya paraleliza por nodo y reporta
+    # exito/fallo por worker. Reimplementar el loop aca seria duplicar el
+    # orquestador y serializar lo que ya es paralelo.
+    _url="$(repo_url "$_repo")"
+    info "syncing $_repo -> all nodes..."
+    if nya @all "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; mkdir -p ~/unix-toolkit-tools && [ -d ~/unix-toolkit-tools/$_repo/.git ] || git clone $_url ~/unix-toolkit-tools/$_repo"; then
+        ok "$_repo distributed to all nodes"
+    else
+        warn "$_repo distributed with errors -- see worker output above"
+    fi
 }
 
 cmd_delete() {
@@ -198,22 +189,13 @@ RPYEOF
 # repos.tsv carries the new name), rename its local clone, fix its remote.
 _rename_propagate() {
     _rp_old="$1" _rp_new="$2"
-    _rp_devices="$(_nodes_db)"
-    [ -f "$_rp_devices" ] || return 0
-    while IFS= read -r _rp_alias; do
-        [ -z "$_rp_alias" ] && continue
-        _rp_blk="$(blockdb_get "$_rp_devices" alias "$_rp_alias")"
-        [ -n "$_rp_blk" ] || continue
-        _rp_ip="$(blockdb_field "$_rp_blk" ip)"
-        _rp_port="$(blockdb_field "$_rp_blk" port)"
-        is_local_ip "$_rp_ip" && continue
-        _wait_reachable "$_rp_ip" "${_rp_port:-22}" || { warn "$_rp_alias — skipped (unreachable)"; continue; }
-        info "propagating rename to $_rp_alias..."
-        _url="$(repo_url "$_rp_new")"
-        if nya "$_rp_alias" "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url" 2>/dev/null; then
-            ok "$_rp_alias — renamed"
-        else
-            warn "$_rp_alias — rename propagation failed"
-        fi
-    done 3< <(_all_nodes_aliases)
+    # Mismo criterio que cmd_new: fan-out via nya @all, que ya es
+    # paralelo y reporta exito/fallo por worker.
+    _url="$(repo_url "$_rp_new")"
+    info "propagating rename to all nodes..."
+    if nya @all "git -C ~/unix-toolkit-tools/ut pull --rebase origin main >/dev/null 2>&1; [ -d ~/unix-toolkit-tools/$_rp_old ] && mv ~/unix-toolkit-tools/$_rp_old ~/unix-toolkit-tools/$_rp_new; git -C ~/unix-toolkit-tools/$_rp_new remote set-url origin $_url"; then
+        ok "rename propagated to all nodes"
+    else
+        warn "rename propagated with errors -- see worker output above"
+    fi
 }

@@ -19,33 +19,45 @@ cmd_sync() {
     rm -f "$_err"
     gh auth status >/dev/null 2>&1 || die "gh not authenticated — run: gh auth login"
     mkdir -p "$DST"
-    errors=0
-    while IFS= read -r repo; do
-        [ "$repo" = "unix-toolkit" ] && continue
-        target="$(repo_dir "$repo")"
-        if [ -e "$target/.git" ]; then
-            info "cmd: git -C \"$target\" pull --rebase --autostash"
-            if ! git -C "$target" pull --rebase --autostash 2>/dev/null; then
-                info "cmd: git -C \"$target\" branch --set-upstream-to=origin/main main"
-                if git -C "$target" branch --set-upstream-to=origin/main main 2>/dev/null \
-                    && git -C "$target" pull --rebase --autostash 2>/dev/null; then
-                    ok "$repo updated"
+    # Fan-out paralelo: mismo patron que cmd_fetch. La lista lleva
+    # repo<TAB>target<TAB>url por linea para que cada worker no tenga
+    # que resolver paths ni leer el TSV. TSV y GITHUB_USER se exportan
+    # para que repo_url funcione dentro del worker sh.
+    export TSV GITHUB_USER
+    _pairs=$(repos_for_target "$_tag" | while IFS= read -r _r; do
+        [ -z "$_r" ] && continue
+        [ "$_r" = "unix-toolkit" ] && continue
+        printf '%s\t%s\t%s\n' "$_r" "$(repo_dir "$_r")" "$(repo_url "$_r")"
+    done)
+    _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-sync-out.XXXXXX")
+    if [ -n "$_pairs" ]; then
+        printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
+            _r="${1%%	*}"; _rest="${1#*	}"; _p="${_rest%%	*}"; _u="${_rest#*	}"
+            if [ -e "$_p/.git" ]; then
+                if git -C "$_p" pull --rebase --autostash >/dev/null 2>&1; then
+                    printf "ok\\t%s\\tupdated\\n" "$_r"
+                elif git -C "$_p" branch --set-upstream-to=origin/main main >/dev/null 2>&1 \
+                    && git -C "$_p" pull --rebase --autostash >/dev/null 2>&1; then
+                    printf "ok\\t%s\\tupdated\\n" "$_r"
                 else
-                    err "$repo — pull failed"; errors=$((errors+1))
+                    printf "fail\\t%s\\tpull failed\\n" "$_r"
                 fi
             else
-                ok "$repo updated"
-            fi
-        else
-            _url="$(repo_url "$repo")"
-            info "cmd: git clone $_url \"$target\""
-            if git clone "$_url" "$target"; then
-                ok "$repo cloned"
-            else
-                err "$repo — clone failed"; errors=$((errors+1))
-            fi
-        fi
-    done < <(repos_for_target "$_tag")
+                if git clone "$_u" "$_p" >/dev/null 2>&1; then
+                    printf "ok\\t%s\\tcloned\\n" "$_r"
+                else
+                    printf "fail\\t%s\\tclone failed\\n" "$_r"
+                fi
+            fi' _ {} > "$_outfile" 2>/dev/null
+    fi
+    errors=0
+    while IFS=$'\t' read -r _st _r _what; do
+        case "$_st" in
+            ok)   ok "$_r $_what" ;;
+            fail) err "$_r — $_what"; errors=$((errors+1)) ;;
+        esac
+    done < "$_outfile"
+    rm -f "$_outfile"
     if [ "$errors" -ne 0 ]; then
         err "$errors repo(s) failed"; exit 1
     fi
@@ -105,20 +117,37 @@ cmd_push() {
             err "ut — push failed"
         fi
     fi
-    # push all tool repos
-    repos_for_target "$_tag" | while IFS= read -r repo; do
-        target="$(repo_dir "$repo")"
-        [ -e "$target/.git" ] || continue
-        _ahead=$(git -C "$target" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)
-        if [ "$_ahead" -gt 0 ]; then
-            info "$repo — pushing $_ahead commit(s)..."
-            if git -C "$target" push; then
-                ok "$repo pushed"; log_change "$repo" "push"
+    # push all tool repos en paralelo. Mismo patron que cmd_fetch: la
+    # lista lleva repo<TAB>target<TAB>ahead por linea, cada worker
+    # pushea solo si hay commits pendientes, y log_change corre en el
+    # padre (despues del fan-out) para no serializar el acceso al
+    # archivo de changelog.
+    _pairs=$(repos_for_target "$_tag" | while IFS= read -r _r; do
+        [ -z "$_r" ] && continue
+        _t="$(repo_dir "$_r")"
+        [ -e "$_t/.git" ] || continue
+        _a="$(git -C "$_t" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)"
+        [ "${_a:-0}" -gt 0 ] || continue
+        printf '%s\t%s\t%s\n' "$_r" "$_t" "$_a"
+    done)
+    _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-push-out.XXXXXX")
+    if [ -n "$_pairs" ]; then
+        printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
+            _r="${1%%	*}"; _rest="${1#*	}"; _p="${_rest%%	*}"; _a="${_rest#*	}"
+            info "$_r — pushing $_a commit(s)..."
+            if git -C "$_p" push >/dev/null 2>&1; then
+                printf "ok\\t%s\\n" "$_r"
             else
-                err "$repo — push failed"
-            fi
-        fi
-    done
+                printf "fail\\t%s\\n" "$_r"
+            fi' _ {} > "$_outfile" 2>/dev/null
+    fi
+    while IFS=$'\t' read -r _st _r; do
+        case "$_st" in
+            ok)   ok "$_r pushed"; log_change "$_r" "push" ;;
+            fail) err "$_r — push failed" ;;
+        esac
+    done < "$_outfile"
+    rm -f "$_outfile"
     # post-push status report, scoped to the same target that was pushed.
     # With the new default (empty = touched repos), leaving this bare
     # would show a different set than the one just pushed.
@@ -152,21 +181,40 @@ cmd_clone() {
             for _a in "$@"; do repos_for_target "$_a"; done
         fi
     }
-    while IFS= read -r repo; do
-        target="$(repo_dir "$repo")"
-        if [ -e "$target/.git" ]; then
-            info "$repo — already cloned, skipping"
-            continue
-        fi
-        _url="$(repo_url "$repo")"
-        info "cmd: git clone $_url \"$target\""
-        if git clone "$_url" "$target"; then
-            ok "$repo cloned"
+    # Fan-out paralelo (mismo patron que cmd_fetch/cmd_sync): la lista
+    # lleva repo<TAB>target<TAB>url por linea. Solo se clonan los que
+    # aun no existen en disco; los ya clonados se reportan como skip en
+    # el padre, despues del fan-out, sin gastar un worker.
+    export TSV GITHUB_USER
+    _pairs=$( _clone_list "$@" | while IFS= read -r _r; do
+        [ -z "$_r" ] && continue
+        _t="$(repo_dir "$_r")"
+        if [ -e "$_t/.git" ]; then
+            printf 'skip\t%s\t%s\n' "$_r" "$_t"
         else
-            err "$repo — clone failed"
-            errors=$((errors+1))
+            printf 'clone\t%s\t%s\t%s\n' "$_r" "$_t" "$(repo_url "$_r")"
         fi
-    done < <(_clone_list "$@")
+    done )
+    _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-clone-out.XXXXXX")
+    _clone_pairs=$(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="clone"')
+    if [ -n "$_clone_pairs" ]; then
+        printf '%s\n' "$_clone_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
+            _r="${1#clone	}"; _r="${_r%%	*}"
+            _rest="${1#*	}"; _p="${_rest%%	*}"; _u="${_rest#*	}"
+            if git clone "$_u" "$_p" >/dev/null 2>&1; then
+                printf "ok\\t%s\\n" "$_r"
+            else
+                printf "fail\\t%s\\n" "$_r"
+            fi' _ {} > "$_outfile" 2>/dev/null
+    fi
+    while IFS=$'\t' read -r _kind _r _rest; do
+        case "$_kind" in
+            skip)  info "$_r — already cloned, skipping" ;;
+            ok)    ok "$_r cloned" ;;
+            fail)  err "$_r — clone failed"; errors=$((errors+1)) ;;
+        esac
+    done < <(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="skip"'; cat "$_outfile" 2>/dev/null)
+    rm -f "$_outfile"
     if [ "$errors" -ne 0 ]; then
         err "$errors repo(s) failed"; exit 1
     fi
