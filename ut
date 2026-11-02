@@ -15,7 +15,7 @@ export GH_PAGER=cat
 
 G='\033[32m'; Y='\033[33m'; R='\033[31m'; C='\033[36m'; B='\033[1m'; Z='\033[0m'
 ok()   { printf "${G}✓ %s${Z}\n" "$*"; }
-warn() { printf "${Y}⚠ %s${Z}\n" "$*"; }
+warn() { printf "${Y}⚠ %s${Z}\n" "$*" >&2; }
 err()  { printf "${R}✗ %s${Z}\n" "$*" >&2; }
 info() { printf "${C}→ %s${Z}\n" "$*"; }
 bold() { printf "${B}%s${Z}\n" "$*"; }

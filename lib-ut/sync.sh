@@ -30,34 +30,41 @@ cmd_sync() {
         printf '%s\t%s\t%s\n' "$_r" "$(repo_dir "$_r")" "$(repo_url "$_r")"
     done)
     _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-sync-out.XXXXXX")
+    _err_dir=$(mktemp -d "${TMPDIR:-/tmp}/ut-sync-err.XXXXXX")
+    export _err_dir
     if [ -n "$_pairs" ]; then
         printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
             _r="${1%%	*}"; _rest="${1#*	}"; _p="${_rest%%	*}"; _u="${_rest#*	}"
+            _log="$_err_dir/$_r.log"
             if [ -e "$_p/.git" ]; then
-                if git -C "$_p" pull --rebase --autostash >/dev/null 2>&1; then
+                if git -C "$_p" pull --rebase --autostash >"$_log" 2>&1; then
                     printf "ok\\t%s\\tupdated\\n" "$_r"
-                elif git -C "$_p" branch --set-upstream-to=origin/main main >/dev/null 2>&1 \
-                    && git -C "$_p" pull --rebase --autostash >/dev/null 2>&1; then
+                elif git -C "$_p" branch --set-upstream-to=origin/main main >>"$_log" 2>&1 \
+                    && git -C "$_p" pull --rebase --autostash >>"$_log" 2>&1; then
                     printf "ok\\t%s\\tupdated\\n" "$_r"
                 else
                     printf "fail\\t%s\\tpull failed\\n" "$_r"
                 fi
             else
-                if git clone "$_u" "$_p" >/dev/null 2>&1; then
+                if git clone "$_u" "$_p" >"$_log" 2>&1; then
                     printf "ok\\t%s\\tcloned\\n" "$_r"
                 else
                     printf "fail\\t%s\\tclone failed\\n" "$_r"
                 fi
-            fi' _ {} > "$_outfile" 2>/dev/null
+            fi' _ {} > "$_outfile"
     fi
     errors=0
     while IFS=$'\t' read -r _st _r _what; do
         case "$_st" in
             ok)   ok "$_r $_what" ;;
-            fail) err "$_r — $_what"; errors=$((errors+1)) ;;
+            fail)
+                err "$_r — $_what"
+                [ -s "$_err_dir/$_r.log" ] && sed "s/^/    /" "$_err_dir/$_r.log" >&2
+                errors=$((errors+1))
+                ;;
         esac
     done < "$_outfile"
-    rm -f "$_outfile"
+    rm -f "$_outfile"; rm -rf "$_err_dir"
     if [ "$errors" -ne 0 ]; then
         err "$errors repo(s) failed"; exit 1
     fi
@@ -68,6 +75,8 @@ cmd_fetch() {
     _tag="${1:-}"
     _errfile=$(mktemp "${TMPDIR:-/tmp}/ut-fetch-err.XXXXXX")
     _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-fetch-out.XXXXXX")
+    _err_dir=$(mktemp -d "${TMPDIR:-/tmp}/ut-fetch-err.XXXXXX")
+    export _err_dir
     printf '0' > "$_errfile"
 
     # Build a "name<TAB>path" list (repo_dir resolves custom paths), then
@@ -81,23 +90,29 @@ cmd_fetch() {
         printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c \
             '_r="${1%%	*}"; _p="${1#*	}"
              if [ -d "$_p/.git" ]; then
-                 git -C "$_p" fetch --quiet 2>/dev/null \
-                     && printf "ok %s\n" "$_r" \
-                     || printf "fail %s\n" "$_r"
+                 if git -C "$_p" fetch --quiet >"$_err_dir/$_r.log" 2>&1; then
+                     printf "ok %s\n" "$_r"
+                 else
+                     printf "fail %s\n" "$_r"
+                 fi
              fi' _ {} \
-            > "$_outfile" 2>/dev/null
+            > "$_outfile"
     fi
 
     while IFS= read -r _line; do
         case "$_line" in
             ok*)   ok  "${_line#ok }" ;;
-            fail*) err "${_line#fail } — fetch failed" ;;
+            fail*)
+                _r="${_line#fail }"
+                err "$_r — fetch failed"
+                [ -s "$_err_dir/$_r.log" ] && sed "s/^/    /" "$_err_dir/$_r.log" >&2
+                ;;
         esac
     done < "$_outfile"
 
     _errors=$(grep -c "^fail" "$_outfile" 2>/dev/null || true)
     _errors="${_errors:-0}"
-    rm -f "$_errfile" "$_outfile"
+    rm -f "$_errfile" "$_outfile"; rm -rf "$_err_dir"
     if [ "$_errors" -ne 0 ]; then
         err "${_errors} repo(s) failed"; exit 1
     fi
@@ -131,22 +146,27 @@ cmd_push() {
         printf '%s\t%s\t%s\n' "$_r" "$_t" "$_a"
     done)
     _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-push-out.XXXXXX")
+    _err_dir=$(mktemp -d "${TMPDIR:-/tmp}/ut-push-err.XXXXXX")
+    export _err_dir
     if [ -n "$_pairs" ]; then
         printf '%s\n' "$_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
             _r="${1%%	*}"; _rest="${1#*	}"; _p="${_rest%%	*}"; _a="${_rest#*	}"
-            if git -C "$_p" push >/dev/null 2>&1; then
+            if git -C "$_p" push >"$_err_dir/$_r.log" 2>&1; then
                 printf "ok\\t%s\\n" "$_r"
             else
                 printf "fail\\t%s\\n" "$_r"
-            fi' _ {} > "$_outfile" 2>/dev/null
+            fi' _ {} > "$_outfile"
     fi
     while IFS=$'\t' read -r _st _r; do
         case "$_st" in
             ok)   ok "$_r pushed"; log_change "$_r" "push" ;;
-            fail) err "$_r — push failed" ;;
+            fail)
+                err "$_r — push failed"
+                [ -s "$_err_dir/$_r.log" ] && sed "s/^/    /" "$_err_dir/$_r.log" >&2
+                ;;
         esac
     done < "$_outfile"
-    rm -f "$_outfile"
+    rm -f "$_outfile"; rm -rf "$_err_dir"
     # post-push status report, scoped to the same target that was pushed.
     # With the new default (empty = touched repos), leaving this bare
     # would show a different set than the one just pushed.
@@ -195,6 +215,8 @@ cmd_clone() {
         fi
     done )
     _outfile=$(mktemp "${TMPDIR:-/tmp}/ut-clone-out.XXXXXX")
+    _err_dir=$(mktemp -d "${TMPDIR:-/tmp}/ut-clone-err.XXXXXX")
+    export _err_dir
     _clone_pairs=$(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="clone"')
     if [ -n "$_clone_pairs" ]; then
         printf '%s\n' "$_clone_pairs" | xargs -P 8 -d '\n' -I{} sh -c '
@@ -203,20 +225,24 @@ cmd_clone() {
             _rest="${_rest#*	}"
             _p="${_rest%%	*}"
             _u="${_rest#*	}"
-            if git clone "$_u" "$_p" >/dev/null 2>&1; then
+            if git clone "$_u" "$_p" >"$_err_dir/$_r.log" 2>&1; then
                 printf "ok\\t%s\\n" "$_r"
             else
                 printf "fail\\t%s\\n" "$_r"
-            fi' _ {} > "$_outfile" 2>/dev/null
+            fi' _ {} > "$_outfile"
     fi
     while IFS=$'\t' read -r _kind _r _rest; do
         case "$_kind" in
             skip)  info "$_r — already cloned, skipping" ;;
             ok)    ok "$_r cloned" ;;
-            fail)  err "$_r — clone failed"; errors=$((errors+1)) ;;
+            fail)
+                err "$_r — clone failed"
+                [ -s "$_err_dir/$_r.log" ] && sed "s/^/    /" "$_err_dir/$_r.log" >&2
+                errors=$((errors+1))
+                ;;
         esac
-    done < <(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="skip"'; cat "$_outfile" 2>/dev/null)
-    rm -f "$_outfile"
+    done < <(printf '%s\n' "$_pairs" | awk -F'\t' '$1=="skip"'; cat "$_outfile")
+    rm -f "$_outfile"; rm -rf "$_err_dir"
     if [ "$errors" -ne 0 ]; then
         err "$errors repo(s) failed"; exit 1
     fi
