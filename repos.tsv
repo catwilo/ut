@@ -69,3 +69,4 @@ nodorin	util,infra,core	Multi-platform node bootstrap: Termux (runit) + Debian (
 kya	tool	canonical LLM content manager: contract, conventions, agents, skills	active	catwilo	
 nya	tool	node orchestrator: fan-out, exec, transfer, clip across nodes	active	catwilo	
 kura	tool util net infra core	gestor distribuido de archivos content-addressed	active	catwilo	
+biblioteca-plan-estrategico	docs	Plan estrategico de la biblioteca municipal - Villanueva	active	catwilo	
