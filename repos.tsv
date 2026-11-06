@@ -7,7 +7,6 @@ zsh-setup	cfg,core	zsh setup + macOS bootstrap (--mac: Nix/deps/PATH/clipboard)	
 mitsuwiki	tool,web,core	personal offline SPA wiki	active	catwilo		
 minitools	util,core	small consolidated utility scripts	active	catwilo		
 audit-privacy	sec,core	privacy audit tool	active	catwilo		
-neko	tool	neko project	active	catwilo		
 streaming	svc	streaming setup	active	catwilo		
 rsync-folder	util	rsync wrapper	active	catwilo		
 sftp-folder	util	sftp wrapper	active	catwilo		
@@ -70,4 +69,4 @@ kya	tool	canonical LLM content manager: contract, conventions, agents, skills	ac
 nya	tool	node orchestrator: fan-out, exec, transfer, clip across nodes	active	catwilo	
 kura	tool util net infra core	gestor distribuido de archivos content-addressed	active	catwilo	
 biblioteca-plan-estrategico	docs,rpx-report	Plan estrategico de la biblioteca municipal - Villanueva	active	catwilo	
-cuenta-cobro-fuvoc-2026-09	docs	Cuenta de cobro FUVOC-2026-09-17	active	catwilo	
+cuenta-cobro-fuvoc-2026-09	docs,rpx-report	Cuenta de cobro FUVOC-2026-09-17	active	catwilo	
